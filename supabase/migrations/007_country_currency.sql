@@ -1,0 +1,2 @@
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS country text NOT NULL DEFAULT 'CZ';
+ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS currency text NOT NULL DEFAULT 'CZK';
