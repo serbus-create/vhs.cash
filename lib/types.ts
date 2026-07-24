@@ -61,6 +61,8 @@ export interface Document {
   total_without_vat: number
   total_with_vat: number
   currency: string
+  exchange_rate?: number | null
+  amount_czk?: number | null
   created_at: string
   clients?: Client | null
 }

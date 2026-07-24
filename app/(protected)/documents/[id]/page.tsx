@@ -51,6 +51,7 @@ export default function EditDocumentPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([])
   const [currency, setCurrency] = useState('CZK')
+  const [hasExchangeRate, setHasExchangeRate] = useState(false)
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
@@ -88,6 +89,7 @@ export default function EditDocumentPage() {
       setTaxDate(doc.tax_date ?? '')
       setVariableSymbol(doc.variable_symbol ?? '')
       setCurrency(doc.currency ?? 'CZK')
+      setHasExchangeRate(doc.exchange_rate != null)
 
       const fetchedItems: DocumentItem[] = doc.document_items ?? []
       setItems(
@@ -127,6 +129,24 @@ export default function EditDocumentPage() {
     setError('')
     setSaved(false)
 
+    // Dopočítat kurz při prvním přechodu do stavu issued / sent
+    const exchangeFields: { exchange_rate?: number; amount_czk?: number } = {}
+    if (['issued', 'sent'].includes(status) && !hasExchangeRate) {
+      if (currency === 'EUR' && issueDate) {
+        try {
+          const rateRes = await fetch(`/api/exchange-rate/${issueDate}`)
+          if (rateRes.ok) {
+            const { rate } = await rateRes.json() as { rate: number }
+            exchangeFields.exchange_rate = rate
+            exchangeFields.amount_czk = Math.round(totalWithVat * rate * 100) / 100
+          }
+        } catch { /* nekritická chyba */ }
+      } else if (currency === 'CZK') {
+        exchangeFields.exchange_rate = 1
+        exchangeFields.amount_czk = Math.round(totalWithVat * 100) / 100
+      }
+    }
+
     const { error: docErr } = await supabase
       .from('documents')
       .update({
@@ -143,10 +163,12 @@ export default function EditDocumentPage() {
         currency,
         total_without_vat: Math.round(totalWithoutVat * 100) / 100,
         total_with_vat: Math.round(totalWithVat * 100) / 100,
+        ...exchangeFields,
       })
       .eq('id', docId)
 
     if (docErr) { setError(docErr.message); setSaving(false); return }
+    if (exchangeFields.exchange_rate !== undefined) setHasExchangeRate(true)
 
     // Replace items atomically
     await supabase.from('document_items').delete().eq('document_id', docId)

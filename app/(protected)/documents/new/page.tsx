@@ -161,6 +161,27 @@ export default function NewDocumentPage() {
 
     if (itemsErr) { setError(itemsErr.message); setSaving(false); return }
 
+    // Dopočítat kurz a CZK ekvivalent při vydání faktury
+    if (status !== 'draft') {
+      if (currency === 'EUR' && issueDate) {
+        try {
+          const rateRes = await fetch(`/api/exchange-rate/${issueDate}`)
+          if (rateRes.ok) {
+            const { rate } = await rateRes.json() as { rate: number }
+            await supabase.from('documents').update({
+              exchange_rate: rate,
+              amount_czk: Math.round(totalWithVat * rate * 100) / 100,
+            }).eq('id', doc.id)
+          }
+        } catch { /* nekritická chyba — kurz lze doplnit zpětně */ }
+      } else if (currency === 'CZK') {
+        await supabase.from('documents').update({
+          exchange_rate: 1,
+          amount_czk: Math.round(totalWithVat * 100) / 100,
+        }).eq('id', doc.id)
+      }
+    }
+
     router.push('/documents')
   }
 

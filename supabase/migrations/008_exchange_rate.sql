@@ -1,0 +1,3 @@
+ALTER TABLE documents
+  ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC,
+  ADD COLUMN IF NOT EXISTS amount_czk    NUMERIC;
