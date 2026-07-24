@@ -135,7 +135,7 @@ export async function GET(request: Request) {
         companyProfile,
         qrCodeUrl,
         clientCountry: client?.country ?? null,
-      })
+      }) as unknown as React.ReactElement
     );
 
     console.log('[pdf] rendered successfully, size:', buffer.length);

@@ -43,7 +43,7 @@ export interface Client {
 }
 
 export type DocumentType = 'faktura' | 'nabidka' | 'objednavka'
-export type DocumentStatus = 'draft' | 'sent' | 'paid' | 'cancelled'
+export type DocumentStatus = 'draft' | 'issued' | 'sent' | 'paid' | 'overdue' | 'cancelled'
 
 export interface Document {
   id: string

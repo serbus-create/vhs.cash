@@ -4,12 +4,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import type { Document } from '@/lib/types'
+import type { Document, DocumentStatus } from '@/lib/types'
 import { formatCurrency, formatDate, STATUS_LABELS, TYPE_LABELS, STATUS_COLORS, getDisplayStatus } from '@/lib/utils'
 
 const STATUS_OPTIONS = ['', 'draft', 'issued', 'sent', 'paid', 'overdue', 'cancelled']
 
-const STATUS_OPTION_LIST = ['draft', 'issued', 'sent', 'paid', 'overdue', 'cancelled']
+const STATUS_OPTION_LIST: DocumentStatus[] = ['draft', 'issued', 'sent', 'paid', 'overdue', 'cancelled']
 const TYPE_OPTIONS = ['', 'faktura', 'nabidka', 'objednavka']
 
 export default function DocumentsPage() {
@@ -48,7 +48,7 @@ export default function DocumentsPage() {
     return () => document.removeEventListener('click', close)
   }, [openStatusId])
 
-  const updateStatus = async (docId: string, newStatus: string) => {
+  const updateStatus = async (docId: string, newStatus: DocumentStatus) => {
     setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: newStatus } : d))
     setOpenStatusId(null)
     setDropdownPos(null)
