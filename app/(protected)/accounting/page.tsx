@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   formatCurrency,
@@ -41,44 +41,6 @@ function monthLabel(year: number, month: number): string {
     year: 'numeric',
   })
   return raw.charAt(0).toUpperCase() + raw.slice(1)
-}
-
-// ---------- PaidAmountCell (inline edit) ----------
-
-interface PaidAmountCellProps {
-  docId: string
-  initialValue: number | null
-  onSave: (docId: string, value: number | null) => Promise<void>
-}
-
-function PaidAmountCell({ docId, initialValue, onSave }: PaidAmountCellProps) {
-  const [value, setValue] = useState(initialValue != null ? initialValue.toString() : '')
-
-  useEffect(() => {
-    setValue(initialValue != null ? initialValue.toString() : '')
-  }, [initialValue])
-
-  const commit = () => {
-    const trimmed = value.trim()
-    if (trimmed === '') { onSave(docId, null); return }
-    const parsed = parseFloat(trimmed)
-    if (isNaN(parsed)) { setValue(initialValue != null ? initialValue.toString() : ''); return }
-    onSave(docId, parsed)
-  }
-
-  return (
-    <input
-      type="number"
-      min="0"
-      step="0.01"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-      placeholder="—"
-      className="w-28 text-right px-2 py-1 border border-transparent hover:border-gray-200 rounded-md text-sm focus:outline-none focus:border-[#F04E12] focus:ring-1 focus:ring-[#F04E12] transition-colors"
-    />
-  )
 }
 
 // ---------- main component ----------
@@ -131,17 +93,6 @@ export default function AccountingPage() {
       return d.company_profiles?.profile_type === want
     })
   }, [docs, navDate, entityFilter])
-
-  // inline save
-  const savePaidAmount = useCallback(async (docId: string, value: number | null) => {
-    const { error } = await supabase
-      .from('documents')
-      .update({ paid_amount: value })
-      .eq('id', docId)
-    if (!error) {
-      setDocs((prev) => prev.map((d) => (d.id === docId ? { ...d, paid_amount: value } : d)))
-    }
-  }, [supabase])
 
   // ZIP download
   const handleZipDownload = async () => {
@@ -271,7 +222,6 @@ export default function AccountingPage() {
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Splatnost</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Status</th>
                   <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Celkem (CZK)</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Zaplaceno</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -307,19 +257,12 @@ export default function AccountingPage() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <PaidAmountCell
-                            docId={doc.id}
-                            initialValue={doc.paid_amount}
-                            onSave={savePaidAmount}
-                          />
-                        </td>
                       </tr>
                     )
                   })
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-6 py-16 text-center text-gray-400 text-sm">
+                    <td colSpan={7} className="px-6 py-16 text-center text-gray-400 text-sm">
                       Žádné faktury pro {monthLabel(navDate.year, navDate.month).toLowerCase()}.
                     </td>
                   </tr>

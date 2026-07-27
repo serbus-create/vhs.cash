@@ -21,6 +21,8 @@ export default function DocumentsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [openStatusId, setOpenStatusId] = useState<string | null>(null)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
+  const [paymentDoc, setPaymentDoc] = useState<Document | null>(null)
+  const [paymentInput, setPaymentInput] = useState('')
   const supabase = createClient()
   const router = useRouter()
 
@@ -53,6 +55,30 @@ export default function DocumentsPage() {
     setOpenStatusId(null)
     setDropdownPos(null)
     await supabase.from('documents').update({ status: newStatus }).eq('id', docId)
+  }
+
+  const openPaymentModal = (doc: Document) => {
+    setPaymentDoc(doc)
+    setPaymentInput(doc.paid_amount != null ? String(doc.paid_amount) : '')
+  }
+
+  const savePayment = async () => {
+    if (!paymentDoc) return
+    const amount = parseFloat(paymentInput)
+    if (isNaN(amount) || amount < 0) return
+    const total = paymentDoc.amount_czk ?? paymentDoc.total_with_vat ?? 0
+    const isFullyPaid = amount >= total
+    const updates: Record<string, unknown> = { paid_amount: amount }
+    if (isFullyPaid) updates.status = 'paid'
+    const { error } = await supabase.from('documents').update(updates).eq('id', paymentDoc.id)
+    if (!error) {
+      setDocuments(prev => prev.map(d =>
+        d.id === paymentDoc.id
+          ? { ...d, paid_amount: amount, ...(isFullyPaid ? { status: 'paid' as DocumentStatus } : {}) }
+          : d
+      ))
+      setPaymentDoc(null)
+    }
   }
 
   const deleteDoc = async (id: string) => {
@@ -246,9 +272,30 @@ export default function DocumentsPage() {
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-3.5 text-right font-medium">{formatCurrency(doc.total_with_vat ?? 0, doc.currency)}</td>
+                  <td className="px-6 py-3.5 text-right font-medium">
+                    {formatCurrency(doc.total_with_vat ?? 0, doc.currency)}
+                    {doc.paid_amount != null && doc.paid_amount < (doc.amount_czk ?? doc.total_with_vat ?? 0) && (
+                      <div className="text-xs text-gray-400 font-normal mt-0.5">
+                        uhrazeno {formatCurrency(doc.paid_amount)}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-3.5" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1.5">
+                      {/* Record payment — only for faktury */}
+                      {doc.type === 'faktura' && (
+                        <button
+                          onClick={() => openPaymentModal(doc)}
+                          className="p-1.5 text-gray-400 hover:text-[#F04E12] transition-colors rounded"
+                          title="Zaznamenat platbu"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                            <circle cx="12" cy="12" r="2" strokeWidth={1.8} />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 12h.01M18 12h.01" />
+                          </svg>
+                        </button>
+                      )}
                       {/* Edit */}
                       <button
                         onClick={() => router.push(`/documents/${doc.id}`)}
@@ -297,6 +344,73 @@ export default function DocumentsPage() {
           </table>
         )}
       </div>
+      {/* Payment modal */}
+      {paymentDoc && (() => {
+        const total = paymentDoc.amount_czk ?? paymentDoc.total_with_vat ?? 0
+        const inputAmount = parseFloat(paymentInput)
+        const remaining = isNaN(inputAmount) ? total : Math.max(0, total - inputAmount)
+        const isFullyPaid = !isNaN(inputAmount) && inputAmount >= total
+        const canSave = !isNaN(inputAmount) && inputAmount >= 0
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+            onClick={() => setPaymentDoc(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div>
+                <h2 className="text-base font-bold text-[#111111]">Zaznamenat platbu</h2>
+                <p className="text-sm text-gray-500 mt-1">{paymentDoc.number}</p>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between">
+                <span className="text-sm text-gray-500">Celková částka</span>
+                <span className="text-sm font-semibold text-[#111111]">{formatCurrency(total)}</span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-gray-700">Uhrazeno (Kč)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={paymentInput}
+                  onChange={(e) => setPaymentInput(e.target.value)}
+                  placeholder="0"
+                  autoFocus
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12] focus:border-transparent transition-colors"
+                />
+                {isFullyPaid ? (
+                  <p className="text-xs font-medium text-green-600 pt-0.5">Faktura bude označena jako zaplacena</p>
+                ) : (
+                  <p className="text-xs text-gray-400 pt-0.5">
+                    Zbývá doplatit: {formatCurrency(remaining)}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setPaymentDoc(null)}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Zrušit
+                </button>
+                <button
+                  onClick={savePayment}
+                  disabled={!canSave}
+                  className="flex-1 px-4 py-2.5 bg-[#F04E12] text-white rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Uložit
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
