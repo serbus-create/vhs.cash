@@ -52,6 +52,7 @@ export default function EditDocumentPage() {
   const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([])
   const [currency, setCurrency] = useState('CZK')
   const [hasExchangeRate, setHasExchangeRate] = useState(false)
+  const [paidAmount, setPaidAmount] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
@@ -90,6 +91,7 @@ export default function EditDocumentPage() {
       setVariableSymbol(doc.variable_symbol ?? '')
       setCurrency(doc.currency ?? 'CZK')
       setHasExchangeRate(doc.exchange_rate != null)
+      setPaidAmount(doc.paid_amount ?? null)
 
       const fetchedItems: DocumentItem[] = doc.document_items ?? []
       setItems(
@@ -163,6 +165,7 @@ export default function EditDocumentPage() {
         currency,
         total_without_vat: Math.round(totalWithoutVat * 100) / 100,
         total_with_vat: Math.round(totalWithVat * 100) / 100,
+        paid_amount: paidAmount,
         ...exchangeFields,
       })
       .eq('id', docId)
@@ -414,6 +417,22 @@ export default function EditDocumentPage() {
                     value={variableSymbol}
                     onChange={(e) => setVariableSymbol(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                    Zaplaceno
+                    <span className="ml-1.5 text-gray-400 font-normal normal-case">částečná úhrada v Kč</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={paidAmount ?? ''}
+                    onChange={(e) => setPaidAmount(e.target.value === '' ? null : parseFloat(e.target.value))}
+                    placeholder="—"
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                   />
                 </div>
               </>

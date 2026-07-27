@@ -63,6 +63,7 @@ export interface Document {
   currency: string
   exchange_rate?: number | null
   amount_czk?: number | null
+  paid_amount?: number | null
   created_at: string
   clients?: Client | null
 }

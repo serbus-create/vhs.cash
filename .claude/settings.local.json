@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(git *)",
+      "Bash(npm install *)",
+      "Bash(sudo chown -R 501:20 \"/Users/milosserbus/.npm\")",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(npm run *)",
+      "Bash(grep -E \"^jszip$|^recharts$\")",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(echo \"PID: $!\")",
+      "Bash(npx tsx *)"
     ]
   }
 }
