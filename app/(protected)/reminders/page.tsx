@@ -6,7 +6,11 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import {
   getReminderSubject,
   getReminderBodyText,
+  getReminderLabels,
+  getLang,
   type ReminderLevel,
+  type Lang,
+  type ReminderLabels,
 } from '@/lib/reminder-email'
 
 // ---------- types ----------
@@ -18,15 +22,29 @@ interface OverdueDoc {
   amount_czk: number | null
   total_with_vat: number
   currency: string
-  clients: { name: string; email: string | null } | null
+  variable_symbol: string | null
+  company_profile_id: string | null
+  clients: { name: string; email: string | null; country: string | null } | null
   last_reminder: { sent_at: string; level: number } | null
+}
+
+interface PaymentInfo {
+  bankAccount: string | null
+  iban: string | null
+  swift: string | null
+  companyName: string
 }
 
 interface ModalState {
   doc: OverdueDoc
   level: ReminderLevel
+  lang: Lang
+  labels: ReminderLabels
   subject: string
   bodyText: string
+  qrCodeUrl: string | null
+  paymentInfo: PaymentInfo | null
+  qrLoading: boolean
 }
 
 // ---------- helpers ----------
@@ -79,6 +97,28 @@ function levelBadge(level: ReminderLevel) {
   )
 }
 
+async function fetchQrCode(params: {
+  number: string
+  total_with_vat: number
+  currency: string
+  variable_symbol: string | null
+  iban: string
+  swift: string | null
+  companyName: string
+}): Promise<string | null> {
+  try {
+    const res = await fetch('/api/qr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    })
+    const { url } = await res.json()
+    return url ?? null
+  } catch {
+    return null
+  }
+}
+
 // ---------- main component ----------
 
 export default function RemindersPage() {
@@ -95,10 +135,9 @@ export default function RemindersPage() {
       setLoading(true)
       const today = new Date().toISOString().split('T')[0]
 
-      // Fetch overdue invoices with client info
       const { data: documents } = await supabase
         .from('documents')
-        .select('id, number, due_date, amount_czk, total_with_vat, currency, clients(name, email)')
+        .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, clients(name, email, country)')
         .eq('type', 'faktura')
         .not('status', 'in', '("paid","cancelled","draft")')
         .lt('due_date', today)
@@ -112,14 +151,12 @@ export default function RemindersPage() {
 
       const docIds = documents.map((d) => d.id)
 
-      // Fetch last reminder per document
       const { data: reminders } = await supabase
         .from('reminders')
         .select('document_id, sent_at, level')
         .in('document_id', docIds)
         .order('sent_at', { ascending: false })
 
-      // Build map: document_id → last reminder
       const lastReminderMap: Record<string, { sent_at: string; level: number }> = {}
       for (const r of reminders ?? []) {
         if (!lastReminderMap[r.document_id]) {
@@ -134,7 +171,9 @@ export default function RemindersPage() {
         amount_czk: d.amount_czk,
         total_with_vat: d.total_with_vat,
         currency: d.currency,
-        clients: (Array.isArray(d.clients) ? d.clients[0] : d.clients) as { name: string; email: string | null } | null,
+        variable_symbol: d.variable_symbol ?? null,
+        company_profile_id: d.company_profile_id ?? null,
+        clients: (Array.isArray(d.clients) ? d.clients[0] : d.clients) as { name: string; email: string | null; country: string | null } | null,
         last_reminder: lastReminderMap[d.id] ?? null,
       }))
 
@@ -154,18 +193,61 @@ export default function RemindersPage() {
     return byLevel
   }, [docs])
 
-  const openModal = (doc: OverdueDoc) => {
+  const openModal = async (doc: OverdueDoc) => {
     const days = daysOverdue(doc.due_date)
     const level = reminderLevel(days)
+    const lang = getLang(doc.clients?.country)
+    const labels = getReminderLabels(lang)
     const amount = doc.amount_czk ?? doc.total_with_vat
     const vars = { number: doc.number, daysOverdue: days, amount, dueDate: doc.due_date }
+
     setModal({
       doc,
       level,
-      subject: getReminderSubject(level, vars),
-      bodyText: getReminderBodyText(level, vars),
+      lang,
+      labels,
+      subject: getReminderSubject(level, vars, lang),
+      bodyText: getReminderBodyText(level, vars, lang),
+      qrCodeUrl: null,
+      paymentInfo: null,
+      qrLoading: true,
     })
     setSendError('')
+
+    if (doc.company_profile_id) {
+      const { data: profile } = await supabase
+        .from('company_profiles')
+        .select('name, bank_account, iban, swift')
+        .eq('id', doc.company_profile_id)
+        .single()
+
+      if (profile) {
+        const paymentInfo: PaymentInfo = {
+          bankAccount: profile.bank_account ?? null,
+          iban: profile.iban ?? null,
+          swift: profile.swift ?? null,
+          companyName: profile.name ?? '',
+        }
+
+        let qrCodeUrl: string | null = null
+        if (profile.iban) {
+          qrCodeUrl = await fetchQrCode({
+            number: doc.number,
+            total_with_vat: doc.total_with_vat,
+            currency: doc.currency ?? 'CZK',
+            variable_symbol: doc.variable_symbol,
+            iban: profile.iban,
+            swift: profile.swift ?? null,
+            companyName: profile.name ?? '',
+          })
+        }
+
+        setModal((prev) => prev ? { ...prev, qrCodeUrl, paymentInfo, qrLoading: false } : prev)
+        return
+      }
+    }
+
+    setModal((prev) => prev ? { ...prev, qrLoading: false } : prev)
   }
 
   const handleSend = async () => {
@@ -242,7 +324,6 @@ export default function RemindersPage() {
           const cfg = LEVEL_CONFIG[level]
           return (
             <div key={level} className="space-y-3">
-              {/* Section header */}
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-[#111111] uppercase tracking-wide">
                   {cfg.label}
@@ -252,7 +333,6 @@ export default function RemindersPage() {
                 </span>
               </div>
 
-              {/* Table */}
               <div className={`bg-white rounded-xl border shadow-sm overflow-hidden ${cfg.sectionBg}`}>
                 <table className="w-full text-sm">
                   <thead>
@@ -284,7 +364,7 @@ export default function RemindersPage() {
                           </td>
                           <td className="px-6 py-3.5 text-gray-500 whitespace-nowrap">{formatDate(doc.due_date)}</td>
                           <td className="px-6 py-3.5">
-                            <span className={`inline-flex items-center gap-1.5 font-semibold text-sm`} style={{ color: cfg.color }}>
+                            <span className="inline-flex items-center gap-1.5 font-semibold text-sm" style={{ color: cfg.color }}>
                               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.color }} />
                               {days} dní
                             </span>
@@ -338,7 +418,6 @@ export default function RemindersPage() {
             className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal header stripe */}
             <div className="h-1 bg-[#F04E12] rounded-t-2xl" />
 
             <div className="p-6 space-y-5">
@@ -391,24 +470,94 @@ export default function RemindersPage() {
                 <textarea
                   value={modal.bodyText}
                   onChange={(e) => setModal((m) => m ? { ...m, bodyText: e.target.value } : m)}
-                  rows={14}
+                  rows={12}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12] resize-y font-mono leading-relaxed"
                 />
+              </div>
+
+              {/* Payment box preview */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Platební údaje (součást e-mailu)</p>
+                </div>
+                {modal.qrLoading ? (
+                  <div className="px-4 py-5 flex items-center gap-2 text-gray-400 text-sm">
+                    <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Načítám platební údaje…
+                  </div>
+                ) : (
+                  <div className="px-4 py-4 flex gap-4">
+                    {/* Payment details */}
+                    <div className="flex-1 min-w-0">
+                      <table className="text-sm w-full">
+                        <tbody>
+                          <PaymentRow label={modal.labels.labelInvoice} value={modal.doc.number} />
+                          <PaymentRow
+                            label={modal.labels.labelAmount}
+                            value={
+                              modal.doc.currency === 'EUR' && modal.doc.total_with_vat != null
+                                ? `${formatCurrency(modal.doc.amount_czk ?? modal.doc.total_with_vat)} (${formatCurrency(modal.doc.total_with_vat, 'EUR')})`
+                                : formatCurrency(modal.doc.amount_czk ?? modal.doc.total_with_vat)
+                            }
+                          />
+                          {modal.paymentInfo?.bankAccount && (
+                            <PaymentRow label={modal.labels.labelAccount} value={modal.paymentInfo.bankAccount} />
+                          )}
+                          {modal.paymentInfo?.iban && (
+                            <PaymentRow label="IBAN" value={modal.paymentInfo.iban} />
+                          )}
+                          {modal.doc.variable_symbol && (
+                            <PaymentRow label={modal.labels.labelVs} value={modal.doc.variable_symbol} />
+                          )}
+                          <PaymentRow label={modal.labels.labelDueDate} value={formatDate(modal.doc.due_date)} />
+                          {!modal.paymentInfo && (
+                            <tr>
+                              <td colSpan={2} className="py-1 text-xs text-gray-400 italic">
+                                Platební údaje nebyly nalezeny (chybí profil dodavatele)
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* QR code */}
+                    {modal.qrCodeUrl ? (
+                      <div className="shrink-0 text-center">
+                        <img
+                          src={modal.qrCodeUrl}
+                          alt="QR platba"
+                          width={96}
+                          height={96}
+                          className="border border-gray-200 rounded-lg p-1"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">{modal.labels.labelQr}</p>
+                      </div>
+                    ) : modal.paymentInfo?.iban == null && !modal.qrLoading ? (
+                      <div className="shrink-0 w-24 flex items-center justify-center text-xs text-gray-300 text-center">
+                        QR není k dispozici (chybí IBAN)
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
 
               {/* Signature preview */}
               <div className="border border-gray-100 rounded-lg p-4 bg-gray-50">
                 <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">Podpis (automaticky připojen)</p>
                 <div className="text-sm text-gray-600 space-y-0.5">
-                  <p>S pozdravem</p>
+                  <p>{modal.labels.signGreeting}</p>
                   <p className="font-bold text-[#111111]">Rudolf von Zahlung</p>
-                  <p className="text-gray-500">Referent z oddělení trpělivosti</p>
-                  <p className="text-gray-500">ve společnosti</p>
+                  <p className="text-gray-500">{modal.labels.signTitle}</p>
+                  <p className="text-gray-500">{modal.labels.signCompanyPrep}</p>
                   <p className="font-black text-[#F04E12] text-2xl" style={{ fontFamily: 'Georgia, serif' }}>vhs.</p>
                   <p className="text-gray-500 text-xs">www.v-h-s.cz · info@v-h-s.cz</p>
-                  <p className="text-gray-400 text-xs pt-1 border-t border-gray-200 mt-2">
-                    Tento e-mail vygeneroval AI systém vhs. — VHSka, který ohlídá každou zbloudilou fakturku.
-                  </p>
+                  <p
+                    className="text-gray-400 text-xs pt-1 border-t border-gray-200 mt-2"
+                    dangerouslySetInnerHTML={{ __html: modal.labels.aiNote }}
+                  />
                 </div>
               </div>
 
@@ -417,10 +566,9 @@ export default function RemindersPage() {
                 <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Odesílací adresa: upominka@v-h-s.cz · E-mail bude odeslán jako HTML s formátovaným podpisem.
+                Odesílací adresa: upominka@v-h-s.cz · E-mail bude odeslán jako HTML s formátovaným podpisem a PDF přílohou.
               </div>
 
-              {/* Error */}
               {sendError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
                   {sendError}
@@ -464,5 +612,14 @@ export default function RemindersPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function PaymentRow({ label, value }: { label: string; value: string }) {
+  return (
+    <tr>
+      <td className="pr-4 py-1 text-xs text-gray-500 whitespace-nowrap align-top">{label}</td>
+      <td className="py-1 text-xs font-semibold text-[#111111]">{value}</td>
+    </tr>
   )
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { getReminderHtml, type ReminderLevel } from '@/lib/reminder-email'
+import { getReminderHtml, getLang, type ReminderLevel } from '@/lib/reminder-email'
 import { generateInvoicePdf, generateQrCodeUrl } from '@/lib/pdf/generate'
 
 export const runtime = 'nodejs'
@@ -49,15 +49,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Chybí povinné parametry' }, { status: 400 })
     }
 
-    // Verify document belongs to user and fetch data needed for HTML + payment box
+    // Fetch document with client country for language detection
     const { data: doc } = await supabase
       .from('documents')
-      .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id')
+      .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, client_id, clients(country)')
       .eq('id', documentId)
       .eq('user_id', user.id)
       .single()
 
     if (!doc) return NextResponse.json({ error: 'Dokument nenalezen' }, { status: 404 })
+
+    const clientCountry = (Array.isArray(doc.clients) ? doc.clients[0] : doc.clients)?.country ?? null
+    const lang = getLang(clientCountry)
 
     const amount = (doc.amount_czk ?? doc.total_with_vat) as number
     const daysOverdue = doc.due_date
@@ -101,7 +104,7 @@ export async function POST(req: NextRequest) {
       variableSymbol: (doc.variable_symbol as string | null) ?? null,
       qrCodeUrl,
     }
-    const htmlContent = getReminderHtml(level, vars)
+    const htmlContent = getReminderHtml(level, vars, lang)
 
     // Generate PDF attachment — fail gracefully if rendering fails
     let pdfAttachment: { filename: string; content: Buffer } | null = null
