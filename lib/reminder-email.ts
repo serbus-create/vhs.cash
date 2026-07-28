@@ -7,6 +7,13 @@ interface ReminderVars {
   daysOverdue: number
   amount: number
   dueDate: string | null
+  // Payment details — optional, shown in payment box when provided
+  currency?: string
+  amountEur?: number | null
+  bankAccount?: string | null
+  iban?: string | null
+  variableSymbol?: string | null
+  qrCodeUrl?: string | null
 }
 
 export function getReminderSubject(level: ReminderLevel, vars: ReminderVars): string {
@@ -17,17 +24,24 @@ export function getReminderSubject(level: ReminderLevel, vars: ReminderVars): st
 }
 
 export function getReminderBodyText(level: ReminderLevel, vars: ReminderVars): string {
-  const { number, daysOverdue, amount, dueDate } = vars
+  const { number, daysOverdue, amount, dueDate, iban, bankAccount, variableSymbol } = vars
   const amountFormatted = formatCurrency(amount)
   const dateFormatted = formatDate(dueDate)
+
+  const paymentLines = [
+    `Částka k úhradě: ${amountFormatted}`,
+    `Datum splatnosti: ${dateFormatted}`,
+    bankAccount ? `Číslo účtu: ${bankAccount}` : null,
+    iban ? `IBAN: ${iban}` : null,
+    variableSymbol ? `Variabilní symbol: ${variableSymbol}` : null,
+  ].filter(Boolean).join('\n')
 
   if (level === 1) {
     return `Dobrý den,
 
 možná jste naši fakturu č. ${number} jen přehlédli — dovolujeme si připomenout, že je po splatnosti (${daysOverdue} dní).
 
-Částka k úhradě: ${amountFormatted}
-Datum splatnosti: ${dateFormatted}
+${paymentLines}
 
 Budeme rádi za úhradu v nejbližších dnech. Pokud jste již zaplatili, omluvte prosím tuto zprávu — platby se občas na cestě zpozdí.
 
@@ -39,8 +53,7 @@ Děkujeme za pochopení a těšíme se na další spolupráci.`
 
 faktura č. ${number} je již ${daysOverdue} dní po splatnosti a dosud jsme neobdrželi platbu.
 
-Částka k úhradě: ${amountFormatted}
-Datum splatnosti: ${dateFormatted}
+${paymentLines}
 
 Žádáme Vás o neprodlenou úhradu. Pokud platba již proběhla, prosíme o zaslání potvrzení nebo dokladu o platbě, abychom mohli fakturu uzavřít.
 
@@ -51,13 +64,66 @@ V případě jakýchkoliv nejasností nás prosím kontaktujte.`
 
 faktura č. ${number} je ${daysOverdue} dní po splatnosti a dosud nebyla uhrazena.
 
-Částka k úhradě: ${amountFormatted}
-Datum splatnosti: ${dateFormatted}
+${paymentLines}
 
 Žádáme o okamžitou úhradu celé dlužné částky. Pokud k úhradě nedojde do 7 dnů od doručení tohoto e-mailu, budu nucen předat celou věc humanoidnímu tvorovi z naší společnosti, který ji následně postoupí právnímu zástupci k vymáhání pohledávky včetně příslušenství.
 
 V případě, že jde o nedorozumění nebo jste platbu již provedli, kontaktujte nás prosím neprodleně.`
 }
+
+// ---------- payment box ----------
+
+function buildPaymentBoxHtml(vars: ReminderVars): string {
+  const { number, amount, dueDate, currency, amountEur, bankAccount, iban, variableSymbol, qrCodeUrl } = vars
+  const amountCzkFormatted = formatCurrency(amount)
+  const dateFormatted = formatDate(dueDate)
+
+  const amountDisplay = currency === 'EUR' && amountEur != null
+    ? `${amountCzkFormatted} <span style="color:#6b7280;font-weight:400;font-size:14px;">(${formatCurrency(amountEur, 'EUR')})</span>`
+    : amountCzkFormatted
+
+  const rows: { label: string; value: string }[] = [
+    { label: 'Faktura č.', value: number },
+    { label: 'Částka k úhradě', value: amountDisplay },
+    ...(bankAccount ? [{ label: 'Číslo účtu', value: bankAccount }] : []),
+    ...(iban ? [{ label: 'IBAN', value: iban }] : []),
+    ...(variableSymbol ? [{ label: 'Variabilní symbol', value: variableSymbol }] : []),
+    { label: 'Datum splatnosti', value: dateFormatted },
+  ]
+
+  const detailsHtml = rows.map(({ label, value }) => `
+    <tr>
+      <td style="padding:5px 16px 5px 0;color:#6b7280;font-size:12px;white-space:nowrap;vertical-align:top;">${label}</td>
+      <td style="padding:5px 0;font-size:13px;font-weight:600;color:#111111;vertical-align:top;">${value}</td>
+    </tr>`).join('')
+
+  const qrHtml = qrCodeUrl ? `
+    <td style="vertical-align:top;padding-left:20px;text-align:center;width:140px;">
+      <img src="${qrCodeUrl}" alt="QR platba" width="120" height="120" style="display:block;border:1px solid #e5e7eb;border-radius:6px;padding:4px;background:#fff;" />
+      <p style="margin:6px 0 0;font-size:10px;color:#9ca3af;text-align:center;">Zaplatit QR kódem</p>
+    </td>` : ''
+
+  return `
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <p style="margin:0 0 14px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Platební údaje</p>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td style="vertical-align:top;">
+            <table cellpadding="0" cellspacing="0" border="0">
+              ${detailsHtml}
+            </table>
+          </td>
+          ${qrHtml}
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`
+}
+
+// ---------- signature ----------
 
 const SIGNATURE_HTML = `
 <table cellpadding="0" cellspacing="0" border="0" style="margin-top:32px;padding-top:24px;border-top:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#374151;">
@@ -80,10 +146,10 @@ const SIGNATURE_HTML = `
 </table>
 `
 
+// ---------- HTML builder ----------
+
 export function getReminderHtml(level: ReminderLevel, vars: ReminderVars): string {
-  const { number, daysOverdue, amount, dueDate } = vars
-  const amountFormatted = formatCurrency(amount)
-  const dateFormatted = formatDate(dueDate)
+  const { number, daysOverdue } = vars
 
   let bodyHtml = ''
 
@@ -91,11 +157,6 @@ export function getReminderHtml(level: ReminderLevel, vars: ReminderVars): strin
     bodyHtml = `
       <p>Dobrý den,</p>
       <p>možná jste naši fakturu č. <strong>${number}</strong> jen přehlédli — dovolujeme si připomenout, že je po splatnosti (<strong>${daysOverdue} dní</strong>).</p>
-      <table cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;background:#fff7f5;border-radius:8px;padding:16px 20px;border-left:3px solid #F04E12;">
-        <tr><td style="padding-bottom:6px;color:#6b7280;font-size:13px;">Částka k úhradě</td></tr>
-        <tr><td style="font-size:20px;font-weight:700;color:#111111;padding-bottom:12px;">${amountFormatted}</td></tr>
-        <tr><td style="color:#6b7280;font-size:13px;">Datum splatnosti: <strong style="color:#111111;">${dateFormatted}</strong></td></tr>
-      </table>
       <p>Budeme rádi za úhradu v nejbližších dnech. Pokud jste již zaplatili, omluvte prosím tuto zprávu — platby se občas na cestě zpozdí.</p>
       <p>Děkujeme za pochopení a těšíme se na další spolupráci.</p>
     `
@@ -103,11 +164,6 @@ export function getReminderHtml(level: ReminderLevel, vars: ReminderVars): strin
     bodyHtml = `
       <p>Dobrý den,</p>
       <p>faktura č. <strong>${number}</strong> je již <strong>${daysOverdue} dní po splatnosti</strong> a dosud jsme neobdrželi platbu.</p>
-      <table cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;background:#fff7f5;border-radius:8px;padding:16px 20px;border-left:3px solid #F04E12;">
-        <tr><td style="padding-bottom:6px;color:#6b7280;font-size:13px;">Částka k úhradě</td></tr>
-        <tr><td style="font-size:20px;font-weight:700;color:#111111;padding-bottom:12px;">${amountFormatted}</td></tr>
-        <tr><td style="color:#6b7280;font-size:13px;">Datum splatnosti: <strong style="color:#111111;">${dateFormatted}</strong></td></tr>
-      </table>
       <p>Žádáme Vás o neprodlenou úhradu. Pokud platba již proběhla, prosíme o zaslání potvrzení nebo dokladu o platbě, abychom mohli fakturu uzavřít.</p>
       <p>V případě jakýchkoliv nejasností nás prosím kontaktujte.</p>
     `
@@ -115,11 +171,6 @@ export function getReminderHtml(level: ReminderLevel, vars: ReminderVars): strin
     bodyHtml = `
       <p>Vážený zákazníku,</p>
       <p>faktura č. <strong>${number}</strong> je <strong>${daysOverdue} dní po splatnosti</strong> a dosud nebyla uhrazena.</p>
-      <table cellpadding="0" cellspacing="0" border="0" style="margin:20px 0;background:#fff7f5;border-radius:8px;padding:16px 20px;border-left:3px solid #F04E12;">
-        <tr><td style="padding-bottom:6px;color:#6b7280;font-size:13px;">Částka k úhradě</td></tr>
-        <tr><td style="font-size:20px;font-weight:700;color:#111111;padding-bottom:12px;">${amountFormatted}</td></tr>
-        <tr><td style="color:#6b7280;font-size:13px;">Datum splatnosti: <strong style="color:#111111;">${dateFormatted}</strong></td></tr>
-      </table>
       <p>Žádáme o okamžitou úhradu celé dlužné částky. Pokud k úhradě nedojde do 7 dnů od doručení tohoto e-mailu, budu nucen předat celou věc humanoidnímu tvorovi z naší společnosti, který ji následně postoupí právnímu zástupci k vymáhání pohledávky včetně příslušenství.</p>
       <p>V případě, že jde o nedorozumění nebo jste platbu již provedli, kontaktujte nás prosím neprodleně.</p>
     `
@@ -143,6 +194,7 @@ export function getReminderHtml(level: ReminderLevel, vars: ReminderVars): strin
           <tr>
             <td style="padding:32px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
               ${bodyHtml}
+              ${buildPaymentBoxHtml(vars)}
               ${SIGNATURE_HTML}
             </td>
           </tr>

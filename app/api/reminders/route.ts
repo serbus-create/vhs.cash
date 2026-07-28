@@ -3,6 +3,10 @@ import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getReminderHtml, type ReminderLevel } from '@/lib/reminder-email'
+import { generateInvoicePdf, generateQrCodeUrl } from '@/lib/pdf/generate'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -45,10 +49,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Chybí povinné parametry' }, { status: 400 })
     }
 
-    // Verify document belongs to user and fetch data for HTML
+    // Verify document belongs to user and fetch data needed for HTML + payment box
     const { data: doc } = await supabase
       .from('documents')
-      .select('id, number, due_date, amount_czk, total_with_vat, currency')
+      .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id')
       .eq('id', documentId)
       .eq('user_id', user.id)
       .single()
@@ -60,11 +64,55 @@ export async function POST(req: NextRequest) {
       ? Math.floor((Date.now() - new Date(doc.due_date).getTime()) / 86_400_000)
       : 0
 
-    const vars = { number: doc.number as string, daysOverdue, amount, dueDate: doc.due_date as string | null }
+    // Fetch company profile for payment details + QR code
+    let companyProfile: { name: string; bank_account: string | null; iban: string | null; swift: string | null } | null = null
+    if (doc.company_profile_id) {
+      const { data } = await supabase
+        .from('company_profiles')
+        .select('name, bank_account, iban, swift')
+        .eq('id', doc.company_profile_id)
+        .single()
+      companyProfile = data ?? null
+    }
+
+    // Generate QR code
+    let qrCodeUrl: string | null = null
+    if (companyProfile?.iban) {
+      qrCodeUrl = await generateQrCodeUrl({
+        number: doc.number as string,
+        total_with_vat: doc.total_with_vat as number,
+        currency: (doc.currency ?? 'CZK') as string,
+        variable_symbol: doc.variable_symbol as string | null,
+        iban: companyProfile.iban,
+        swift: companyProfile.swift,
+        companyName: companyProfile.name,
+      })
+    }
+
+    const vars = {
+      number: doc.number as string,
+      daysOverdue,
+      amount,
+      dueDate: doc.due_date as string | null,
+      currency: (doc.currency ?? 'CZK') as string,
+      amountEur: doc.currency === 'EUR' ? (doc.total_with_vat as number) : null,
+      bankAccount: companyProfile?.bank_account ?? null,
+      iban: companyProfile?.iban ?? null,
+      variableSymbol: (doc.variable_symbol as string | null) ?? null,
+      qrCodeUrl,
+    }
     const htmlContent = getReminderHtml(level, vars)
 
-    // Convert plain text body to HTML paragraphs for the text version
-    const textBody = bodyText
+    // Generate PDF attachment — fail gracefully if rendering fails
+    let pdfAttachment: { filename: string; content: Buffer } | null = null
+    try {
+      const pdfBuffer = await generateInvoicePdf(supabase, documentId, user.id)
+      const safeNumber = (doc.number as string).replace(/[^a-zA-Z0-9-]/g, '_')
+      pdfAttachment = { filename: `faktura-${safeNumber}.pdf`, content: pdfBuffer }
+      console.log('[reminders] PDF generated, size:', pdfBuffer.length)
+    } catch (pdfErr) {
+      console.error('[reminders] PDF generation failed, sending without attachment:', pdfErr)
+    }
 
     const { error: sendError } = await resend.emails.send({
       from: 'upominka@v-h-s.cz',
@@ -72,7 +120,8 @@ export async function POST(req: NextRequest) {
       replyTo: 'info@v-h-s.cz',
       subject,
       html: htmlContent,
-      text: textBody,
+      text: bodyText,
+      ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
     })
 
     if (sendError) {
@@ -92,7 +141,7 @@ export async function POST(req: NextRequest) {
       // Email was sent — don't fail the request, just log
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, pdfAttached: pdfAttachment !== null })
   } catch (err) {
     console.error('Reminders API error:', err)
     return NextResponse.json({ error: 'Interní chyba serveru' }, { status: 500 })
