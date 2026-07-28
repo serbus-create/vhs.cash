@@ -23,6 +23,7 @@ interface OverdueDoc {
   total_with_vat: number
   currency: string
   variable_symbol: string | null
+  paid_amount: number | null
   company_profile_id: string | null
   clients: { name: string; email: string | null; country: string | null } | null
   last_reminder: { sent_at: string; level: number } | null
@@ -137,7 +138,7 @@ export default function RemindersPage() {
 
       const { data: documents } = await supabase
         .from('documents')
-        .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, clients(name, email, country)')
+        .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, paid_amount, company_profile_id, clients(name, email, country)')
         .eq('type', 'faktura')
         .not('status', 'in', '("paid","cancelled","draft")')
         .lt('due_date', today)
@@ -172,6 +173,7 @@ export default function RemindersPage() {
         total_with_vat: d.total_with_vat,
         currency: d.currency,
         variable_symbol: d.variable_symbol ?? null,
+        paid_amount: d.paid_amount ?? null,
         company_profile_id: d.company_profile_id ?? null,
         clients: (Array.isArray(d.clients) ? d.clients[0] : d.clients) as { name: string; email: string | null; country: string | null } | null,
         last_reminder: lastReminderMap[d.id] ?? null,
@@ -199,7 +201,7 @@ export default function RemindersPage() {
     const lang = getLang(doc.clients?.country)
     const labels = getReminderLabels(lang)
     const amount = doc.amount_czk ?? doc.total_with_vat
-    const vars = { number: doc.number, daysOverdue: days, amount, dueDate: doc.due_date }
+    const vars = { number: doc.number, daysOverdue: days, amount, dueDate: doc.due_date, paidAmount: doc.paid_amount ?? null }
 
     setModal({
       doc,
@@ -231,9 +233,12 @@ export default function RemindersPage() {
 
         let qrCodeUrl: string | null = null
         if (profile.iban) {
+          const remainingForQr = doc.currency === 'CZK' && doc.paid_amount
+            ? Math.max(0, doc.total_with_vat - doc.paid_amount)
+            : doc.total_with_vat
           qrCodeUrl = await fetchQrCode({
             number: doc.number,
-            total_with_vat: doc.total_with_vat,
+            total_with_vat: remainingForQr,
             currency: doc.currency ?? 'CZK',
             variable_symbol: doc.variable_symbol,
             iban: profile.iban,
@@ -353,6 +358,7 @@ export default function RemindersPage() {
                       const lastSent = sentIds[doc.id] ?? doc.last_reminder
                       const noEmail = !doc.clients?.email
 
+                      const remaining = doc.paid_amount ? amount - doc.paid_amount : amount
                       return (
                         <tr key={doc.id} className="hover:bg-gray-50/60 transition-colors">
                           <td className="px-6 py-3.5 font-medium text-[#F04E12]">{doc.number}</td>
@@ -370,7 +376,12 @@ export default function RemindersPage() {
                             </span>
                           </td>
                           <td className="px-6 py-3.5 text-right font-medium whitespace-nowrap">
-                            {formatCurrency(amount)}
+                            {formatCurrency(remaining)}
+                            {doc.paid_amount ? (
+                              <div className="text-xs text-gray-400 font-normal mt-0.5">
+                                z {formatCurrency(amount)}
+                              </div>
+                            ) : null}
                           </td>
                           <td className="px-6 py-3.5">
                             {lastSent ? (
@@ -495,14 +506,27 @@ export default function RemindersPage() {
                       <table className="text-sm w-full">
                         <tbody>
                           <PaymentRow label={modal.labels.labelInvoice} value={modal.doc.number} />
-                          <PaymentRow
-                            label={modal.labels.labelAmount}
-                            value={
-                              modal.doc.currency === 'EUR' && modal.doc.total_with_vat != null
-                                ? `${formatCurrency(modal.doc.amount_czk ?? modal.doc.total_with_vat)} (${formatCurrency(modal.doc.total_with_vat, 'EUR')})`
-                                : formatCurrency(modal.doc.amount_czk ?? modal.doc.total_with_vat)
-                            }
-                          />
+                          {modal.doc.paid_amount ? (
+                            <>
+                              <PaymentRow
+                                label={modal.labels.labelRemaining}
+                                value={formatCurrency((modal.doc.amount_czk ?? modal.doc.total_with_vat) - modal.doc.paid_amount)}
+                              />
+                              <PaymentRow
+                                label={modal.labels.labelPaidAmount}
+                                value={formatCurrency(modal.doc.paid_amount)}
+                              />
+                            </>
+                          ) : (
+                            <PaymentRow
+                              label={modal.labels.labelAmount}
+                              value={
+                                modal.doc.currency === 'EUR' && modal.doc.total_with_vat != null
+                                  ? `${formatCurrency(modal.doc.amount_czk ?? modal.doc.total_with_vat)} (${formatCurrency(modal.doc.total_with_vat, 'EUR')})`
+                                  : formatCurrency(modal.doc.amount_czk ?? modal.doc.total_with_vat)
+                              }
+                            />
+                          )}
                           {modal.paymentInfo?.bankAccount && (
                             <PaymentRow label={modal.labels.labelAccount} value={modal.paymentInfo.bankAccount} />
                           )}

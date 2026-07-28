@@ -15,6 +15,7 @@ interface ReminderVars {
   iban?: string | null
   variableSymbol?: string | null
   qrCodeUrl?: string | null
+  paidAmount?: number | null
 }
 
 // ─── i18n ────────────────────────────────────────────────────────────────────
@@ -36,6 +37,8 @@ interface ReminderI18n {
   labelVs: string
   labelDueDate: string
   labelQr: string
+  labelPaidAmount: string
+  labelRemaining: string
   signGreeting: string
   signTitle: string
   signCompanyPrep: string
@@ -50,6 +53,8 @@ export interface ReminderLabels {
   labelVs: string
   labelDueDate: string
   labelQr: string
+  labelPaidAmount: string
+  labelRemaining: string
   signGreeting: string
   signTitle: string
   signCompanyPrep: string
@@ -88,6 +93,8 @@ const i18nCs: ReminderI18n = {
   labelVs: 'Variabilní symbol',
   labelDueDate: 'Datum splatnosti',
   labelQr: 'Zaplatit QR kódem',
+  labelPaidAmount: 'Již uhrazeno',
+  labelRemaining: 'Zbývá doplatit',
   signGreeting: 'S pozdravem',
   signTitle: 'Referent z oddělení trpělivosti',
   signCompanyPrep: 've společnosti',
@@ -126,6 +133,8 @@ const i18nDe: ReminderI18n = {
   labelVs: 'Verwendungszweck',
   labelDueDate: 'Fälligkeitsdatum',
   labelQr: 'Per QR-Code bezahlen',
+  labelPaidAmount: 'Bereits bezahlt',
+  labelRemaining: 'Restbetrag',
   signGreeting: 'Mit freundlichen Grüßen',
   signTitle: 'Referent für Zahlungsgeduld',
   signCompanyPrep: 'im Auftrag von',
@@ -164,6 +173,8 @@ const i18nPl: ReminderI18n = {
   labelVs: 'Tytuł przelewu',
   labelDueDate: 'Termin płatności',
   labelQr: 'Zapłać kodem QR',
+  labelPaidAmount: 'Już zapłacono',
+  labelRemaining: 'Pozostało do zapłaty',
   signGreeting: 'Z poważaniem',
   signTitle: 'Specjalista ds. cierpliwości płatniczej',
   signCompanyPrep: 'w imieniu firmy',
@@ -183,6 +194,8 @@ export function getReminderLabels(lang: Lang): ReminderLabels {
     labelVs: i.labelVs,
     labelDueDate: i.labelDueDate,
     labelQr: i.labelQr,
+    labelPaidAmount: i.labelPaidAmount,
+    labelRemaining: i.labelRemaining,
     signGreeting: i.signGreeting,
     signTitle: i.signTitle,
     signCompanyPrep: i.signCompanyPrep,
@@ -201,12 +214,15 @@ export function getReminderSubject(level: ReminderLevel, vars: Pick<ReminderVars
 
 export function getReminderBodyText(level: ReminderLevel, vars: ReminderVars, lang: Lang = 'cs'): string {
   const i = REMINDER_I18N[lang]
-  const { number, daysOverdue, amount, dueDate, iban, bankAccount, variableSymbol } = vars
-  const amountFormatted = formatCurrency(amount)
+  const { number, daysOverdue, amount, dueDate, iban, bankAccount, variableSymbol, paidAmount } = vars
+  const remaining = paidAmount ? amount - paidAmount : amount
   const dateFormatted = formatDate(dueDate)
 
   const paymentLines = [
-    `${i.labelAmount}: ${amountFormatted}`,
+    paidAmount
+      ? `${i.labelRemaining}: ${formatCurrency(remaining)}`
+      : `${i.labelAmount}: ${formatCurrency(amount)}`,
+    paidAmount ? `${i.labelPaidAmount}: ${formatCurrency(paidAmount)}` : null,
     `${i.labelDueDate}: ${dateFormatted}`,
     bankAccount ? `${i.labelAccount}: ${bankAccount}` : null,
     iban ? `IBAN: ${iban}` : null,
@@ -222,7 +238,8 @@ export function getReminderBodyText(level: ReminderLevel, vars: ReminderVars, la
 
 function buildPaymentBoxHtml(vars: ReminderVars, lang: Lang): string {
   const i = REMINDER_I18N[lang]
-  const { number, amount, dueDate, currency, amountEur, bankAccount, iban, variableSymbol, qrCodeUrl } = vars
+  const { number, amount, dueDate, currency, amountEur, bankAccount, iban, variableSymbol, qrCodeUrl, paidAmount } = vars
+  const remaining = paidAmount ? amount - paidAmount : amount
   const amountCzkFormatted = formatCurrency(amount)
   const dateFormatted = formatDate(dueDate)
 
@@ -232,7 +249,12 @@ function buildPaymentBoxHtml(vars: ReminderVars, lang: Lang): string {
 
   const rows: { label: string; value: string }[] = [
     { label: i.labelInvoice, value: number },
-    { label: i.labelAmount, value: amountDisplay },
+    ...(paidAmount
+      ? [
+          { label: i.labelRemaining, value: formatCurrency(remaining) },
+          { label: i.labelPaidAmount, value: formatCurrency(paidAmount) },
+        ]
+      : [{ label: i.labelAmount, value: amountDisplay }]),
     ...(bankAccount ? [{ label: i.labelAccount, value: bankAccount }] : []),
     ...(iban ? [{ label: 'IBAN', value: iban }] : []),
     ...(variableSymbol ? [{ label: i.labelVs, value: variableSymbol }] : []),

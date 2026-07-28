@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     // Fetch document with client country for language detection
     const { data: doc } = await supabase
       .from('documents')
-      .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, client_id, clients(country)')
+      .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, client_id, paid_amount, exchange_rate, clients(country)')
       .eq('id', documentId)
       .eq('user_id', user.id)
       .single()
@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
     const lang = getLang(clientCountry)
 
     const amount = (doc.amount_czk ?? doc.total_with_vat) as number
+    const paidAmount = (doc.paid_amount as number | null) ?? null
     const daysOverdue = doc.due_date
       ? Math.floor((Date.now() - new Date(doc.due_date).getTime()) / 86_400_000)
       : 0
@@ -80,12 +81,24 @@ export async function POST(req: NextRequest) {
       companyProfile = data ?? null
     }
 
+    // Compute remaining amount in invoice currency for QR code
+    const totalWithVat = (doc.total_with_vat as number) ?? 0
+    let remainingForQr = totalWithVat
+    if (paidAmount) {
+      if ((doc.currency ?? 'CZK') === 'CZK') {
+        remainingForQr = totalWithVat - paidAmount
+      } else if (doc.exchange_rate) {
+        remainingForQr = totalWithVat - paidAmount / (doc.exchange_rate as number)
+      }
+      remainingForQr = Math.max(0, Math.round(remainingForQr * 100) / 100)
+    }
+
     // Build QR code URL — served as a real image so Gmail doesn't block it (data: URIs are blocked)
     let qrCodeUrl: string | null = null
     if (companyProfile?.iban) {
       const qrParams = new URLSearchParams({
         iban: companyProfile.iban,
-        amount: String(doc.total_with_vat ?? 0),
+        amount: String(remainingForQr),
         currency: (doc.currency ?? 'CZK') as string,
         number: doc.number as string,
         ...(doc.variable_symbol ? { vs: doc.variable_symbol as string } : {}),
@@ -106,6 +119,7 @@ export async function POST(req: NextRequest) {
       iban: companyProfile?.iban ?? null,
       variableSymbol: (doc.variable_symbol as string | null) ?? null,
       qrCodeUrl,
+      paidAmount,
     }
     const htmlContent = getReminderHtml(level, vars, lang)
 
