@@ -316,8 +316,9 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
   const vatAmount = totalWithVat - totalWithoutVat
 
   const supplierIsVatPayer = companyProfile?.vat_payer !== false
-  const clientIsVatPayer = Boolean(client?.dic)
-  const showVat = supplierIsVatPayer && clientIsVatPayer
+  // Reverse charge (§ 89 ZDPH) — zahraniční EU B2B klient s DIČ, daň odvede zákazník
+  const isReverseCharge = Boolean(client?.dic) && !!country && country !== 'CZ'
+  const showVat = supplierIsVatPayer && !isReverseCharge
 
   const isSro = companyProfile?.profile_type === 'sro'
 
@@ -514,7 +515,7 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
           )}
           <View style={styles.grandTotalRow}>
             <Text style={styles.grandTotalLabel}>{t.celkemKUhrade}</Text>
-            <Text style={styles.grandTotalValue}>{fmt(showVat ? totalWithVat : totalWithoutVat)}</Text>
+            <Text style={styles.grandTotalValue}>{fmt(totalWithVat)}</Text>
           </View>
         </View>
 
@@ -576,7 +577,7 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
               <View style={styles.paymentRight}>
                 <Text style={styles.paymentAmountLabel}>{t.kUhradeCelkem}</Text>
                 <Text style={styles.paymentAmount}>
-                  {fmt(showVat ? totalWithVat : totalWithoutVat)}
+                  {fmt(totalWithVat)}
                 </Text>
               </View>
             </View>
