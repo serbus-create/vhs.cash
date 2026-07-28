@@ -3,7 +3,9 @@ import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getReminderHtml, getLang, type ReminderLevel } from '@/lib/reminder-email'
-import { generateInvoicePdf, generateQrCodeUrl } from '@/lib/pdf/generate'
+import { generateInvoicePdf } from '@/lib/pdf/generate'
+
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://vhs-cash.vercel.app'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -78,18 +80,19 @@ export async function POST(req: NextRequest) {
       companyProfile = data ?? null
     }
 
-    // Generate QR code
+    // Build QR code URL — served as a real image so Gmail doesn't block it (data: URIs are blocked)
     let qrCodeUrl: string | null = null
     if (companyProfile?.iban) {
-      qrCodeUrl = await generateQrCodeUrl({
-        number: doc.number as string,
-        total_with_vat: doc.total_with_vat as number,
-        currency: (doc.currency ?? 'CZK') as string,
-        variable_symbol: doc.variable_symbol as string | null,
+      const qrParams = new URLSearchParams({
         iban: companyProfile.iban,
-        swift: companyProfile.swift,
-        companyName: companyProfile.name,
+        amount: String(doc.total_with_vat ?? 0),
+        currency: (doc.currency ?? 'CZK') as string,
+        number: doc.number as string,
+        ...(doc.variable_symbol ? { vs: doc.variable_symbol as string } : {}),
+        ...(companyProfile.swift ? { swift: companyProfile.swift } : {}),
+        ...(companyProfile.name ? { name: companyProfile.name } : {}),
       })
+      qrCodeUrl = `${APP_BASE_URL}/api/qr-code?${qrParams.toString()}`
     }
 
     const vars = {
