@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
     const { error: sendError } = await resend.emails.send({
       from: 'upominka@v-h-s.cz',
       to: recipientEmail,
+      replyTo: 'info@v-h-s.cz',
       subject,
       html: htmlContent,
       text: textBody,

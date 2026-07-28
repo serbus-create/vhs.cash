@@ -67,7 +67,7 @@ const SIGNATURE_HTML = `
   <tr><td style="padding-bottom:16px;color:#6b7280;">ve společnosti</td></tr>
   <tr>
     <td style="padding-bottom:16px;">
-      <img src="https://vhs-cash.vercel.app/vhs-logo.jpg" alt="vhs." height="32" style="display:block;height:32px;width:auto;border:0;" />
+      <img src="https://vhs-cash.vercel.app/vhs-logo.jpg" alt="vhs." height="48" style="display:block;height:48px;width:auto;border:0;" />
     </td>
   </tr>
   <tr><td style="padding-bottom:2px;"><a href="https://www.v-h-s.cz" style="color:#F04E12;text-decoration:none;">www.v-h-s.cz</a></td></tr>
