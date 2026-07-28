@@ -3,7 +3,6 @@ import { Resend } from 'resend'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getReminderHtml, getLang, type ReminderLevel } from '@/lib/reminder-email'
-import { generateInvoicePdf } from '@/lib/pdf/generate'
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://vhs-cash.vercel.app'
 
@@ -123,17 +122,6 @@ export async function POST(req: NextRequest) {
     }
     const htmlContent = getReminderHtml(level, vars, lang)
 
-    // Generate PDF attachment — fail gracefully if rendering fails
-    let pdfAttachment: { filename: string; content: Buffer } | null = null
-    try {
-      const pdfBuffer = await generateInvoicePdf(supabase, documentId, user.id)
-      const safeNumber = (doc.number as string).replace(/[^a-zA-Z0-9-]/g, '_')
-      pdfAttachment = { filename: `faktura-${safeNumber}.pdf`, content: pdfBuffer }
-      console.log('[reminders] PDF generated, size:', pdfBuffer.length)
-    } catch (pdfErr) {
-      console.error('[reminders] PDF generation failed, sending without attachment:', pdfErr)
-    }
-
     const { error: sendError } = await resend.emails.send({
       from: 'upominka@v-h-s.cz',
       to: recipientEmail,
@@ -141,7 +129,6 @@ export async function POST(req: NextRequest) {
       subject,
       html: htmlContent,
       text: bodyText,
-      ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
     })
 
     if (sendError) {
@@ -161,7 +148,7 @@ export async function POST(req: NextRequest) {
       // Email was sent — don't fail the request, just log
     }
 
-    return NextResponse.json({ ok: true, pdfAttached: pdfAttachment !== null })
+    return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('Reminders API error:', err)
     return NextResponse.json({ error: 'Interní chyba serveru' }, { status: 500 })
