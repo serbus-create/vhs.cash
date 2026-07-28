@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import type { Document, DocumentStatus } from '@/lib/types'
 import { formatCurrency, formatDate, STATUS_LABELS, TYPE_LABELS, STATUS_COLORS, getDisplayStatus } from '@/lib/utils'
+import { useUserRole } from '@/lib/useUserRole'
 
 const STATUS_OPTIONS = ['', 'draft', 'issued', 'sent', 'paid', 'overdue', 'cancelled']
 
@@ -25,6 +26,8 @@ export default function DocumentsPage() {
   const [paymentInput, setPaymentInput] = useState('')
   const supabase = createClient()
   const router = useRouter()
+  const { role } = useUserRole()
+  const isAdmin = role === 'admin'
 
   const loadDocs = useCallback(async () => {
     setLoading(true)
@@ -122,15 +125,17 @@ export default function DocumentsPage() {
           <h1 className="text-2xl font-bold text-[#111111]">Dokumenty</h1>
           <p className="text-gray-500 text-sm mt-1">{documents.length} dokumentů</p>
         </div>
-        <Link
-          href="/documents/new"
-          className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nový dokument
-        </Link>
+        {isAdmin && (
+          <Link
+            href="/documents/new"
+            className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nový dokument
+          </Link>
+        )}
       </div>
 
       {/* Filters */}
@@ -198,7 +203,7 @@ export default function DocumentsPage() {
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Splatnost</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Částka</th>
-                <th className="px-6 py-3" />
+                {isAdmin && <th className="px-6 py-3" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -228,48 +233,56 @@ export default function DocumentsPage() {
                   <td className="px-6 py-3.5 text-gray-500">{formatDate(doc.issue_date)}</td>
                   <td className="px-6 py-3.5 text-gray-500">{doc.due_date ? formatDate(doc.due_date) : '—'}</td>
                   <td className="px-6 py-3.5" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        if (openStatusId === doc.id) {
-                          setOpenStatusId(null)
-                          setDropdownPos(null)
-                        } else {
-                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                          setDropdownPos({ top: rect.bottom + 4, left: rect.left })
-                          setOpenStatusId(doc.id)
-                        }
-                      }}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${STATUS_COLORS[getDisplayStatus(doc.status, doc.due_date)] ?? 'bg-gray-100 text-gray-600'}`}
-                    >
-                      {STATUS_LABELS[getDisplayStatus(doc.status, doc.due_date)] ?? doc.status}
-                      <svg className="w-2.5 h-2.5 opacity-60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {openStatusId === doc.id && dropdownPos && (
-                      <div
-                        style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left }}
-                        className="z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[170px]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {STATUS_OPTION_LIST.map((value) => (
-                          <button
-                            key={value}
-                            onClick={() => updateStatus(doc.id, value)}
-                            className={`w-full text-left px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2 ${doc.status === value ? 'bg-gray-50' : ''}`}
+                    {isAdmin ? (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (openStatusId === doc.id) {
+                              setOpenStatusId(null)
+                              setDropdownPos(null)
+                            } else {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                              setDropdownPos({ top: rect.bottom + 4, left: rect.left })
+                              setOpenStatusId(doc.id)
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${STATUS_COLORS[getDisplayStatus(doc.status, doc.due_date)] ?? 'bg-gray-100 text-gray-600'}`}
+                        >
+                          {STATUS_LABELS[getDisplayStatus(doc.status, doc.due_date)] ?? doc.status}
+                          <svg className="w-2.5 h-2.5 opacity-60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {openStatusId === doc.id && dropdownPos && (
+                          <div
+                            style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left }}
+                            className="z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[170px]"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[value]}`}>
-                              {STATUS_LABELS[value]}
-                            </span>
-                            {doc.status === value && (
-                              <svg className="w-3 h-3 text-gray-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </button>
-                        ))}
-                      </div>
+                            {STATUS_OPTION_LIST.map((value) => (
+                              <button
+                                key={value}
+                                onClick={() => updateStatus(doc.id, value)}
+                                className={`w-full text-left px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2 ${doc.status === value ? 'bg-gray-50' : ''}`}
+                              >
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[value]}`}>
+                                  {STATUS_LABELS[value]}
+                                </span>
+                                {doc.status === value && (
+                                  <svg className="w-3 h-3 text-gray-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[getDisplayStatus(doc.status, doc.due_date)] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {STATUS_LABELS[getDisplayStatus(doc.status, doc.due_date)] ?? doc.status}
+                      </span>
                     )}
                   </td>
                   <td className="px-6 py-3.5 text-right font-medium">
@@ -280,64 +293,66 @@ export default function DocumentsPage() {
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-3.5" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1.5">
-                      {/* Record payment — only for faktury */}
-                      {doc.type === 'faktura' && (
+                  {isAdmin && (
+                    <td className="px-6 py-3.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Record payment — only for faktury */}
+                        {doc.type === 'faktura' && (
+                          <button
+                            onClick={() => openPaymentModal(doc)}
+                            className="p-1.5 text-gray-400 hover:text-[#F04E12] transition-colors rounded"
+                            title="Zaznamenat platbu"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                              <circle cx="12" cy="12" r="2" strokeWidth={1.8} />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 12h.01M18 12h.01" />
+                            </svg>
+                          </button>
+                        )}
+                        {/* Edit */}
                         <button
-                          onClick={() => openPaymentModal(doc)}
+                          onClick={() => router.push(`/documents/${doc.id}`)}
                           className="p-1.5 text-gray-400 hover:text-[#F04E12] transition-colors rounded"
-                          title="Zaznamenat platbu"
+                          title="Upravit"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-                            <circle cx="12" cy="12" r="2" strokeWidth={1.8} />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 12h.01M18 12h.01" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                      )}
-                      {/* Edit */}
-                      <button
-                        onClick={() => router.push(`/documents/${doc.id}`)}
-                        className="p-1.5 text-gray-400 hover:text-[#F04E12] transition-colors rounded"
-                        title="Upravit"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
 
-                      {/* PDF download */}
-                      <button
-                        onClick={() => downloadPdf(doc)}
-                        disabled={downloadingId === doc.id}
-                        className="p-1.5 text-gray-400 hover:text-[#F04E12] transition-colors rounded disabled:opacity-40"
-                        title="Stáhnout PDF"
-                      >
-                        {downloadingId === doc.id ? (
-                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                        ) : (
+                        {/* PDF download */}
+                        <button
+                          onClick={() => downloadPdf(doc)}
+                          disabled={downloadingId === doc.id}
+                          className="p-1.5 text-gray-400 hover:text-[#F04E12] transition-colors rounded disabled:opacity-40"
+                          title="Stáhnout PDF"
+                        >
+                          {downloadingId === doc.id ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          )}
+                        </button>
+
+                        {/* Delete */}
+                        <button
+                          onClick={() => deleteDoc(doc.id)}
+                          className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded"
+                          title="Smazat"
+                        >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
-                        )}
-                      </button>
-
-                      {/* Delete */}
-                      <button
-                        onClick={() => deleteDoc(doc.id)}
-                        className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded"
-                        title="Smazat"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

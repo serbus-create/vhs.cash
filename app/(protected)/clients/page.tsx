@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Client } from '@/lib/types'
+import { useUserRole } from '@/lib/useUserRole'
 
 const EMPTY_FORM = {
   name: '', ico: '', dic: '', address: '', city: '', zip: '', email: '', phone: '',
@@ -36,6 +37,8 @@ export default function ClientsPage() {
   const [isVatPayer, setIsVatPayer] = useState<boolean | null>(null)
   const [error, setError] = useState('')
   const supabase = createClient()
+  const { role } = useUserRole()
+  const isAdmin = role === 'admin'
 
   const loadClients = useCallback(async () => {
     setLoading(true)
@@ -143,15 +146,17 @@ export default function ClientsPage() {
           <h1 className="text-2xl font-bold text-[#111111]">Klienti</h1>
           <p className="text-gray-500 text-sm mt-1">{clients.length} klientů</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Přidat klienta
-        </button>
+        {isAdmin && (
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Přidat klienta
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -161,9 +166,11 @@ export default function ClientsPage() {
         ) : clients.length === 0 ? (
           <div className="py-20 text-center text-gray-400 text-sm">
             Žádní klienti.{' '}
-            <button onClick={openAdd} className="text-[#F04E12] hover:underline">
-              Přidejte prvního.
-            </button>
+            {isAdmin && (
+              <button onClick={openAdd} className="text-[#F04E12] hover:underline">
+                Přidejte prvního.
+              </button>
+            )}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -186,12 +193,16 @@ export default function ClientsPage() {
                   <td className="px-6 py-3.5 text-gray-600">{c.city ?? '—'}</td>
                   <td className="px-6 py-3.5 text-gray-600">{c.email ?? '—'}</td>
                   <td className="px-6 py-3.5 text-right">
-                    <button onClick={() => openEdit(c)} className="text-gray-400 hover:text-[#F04E12] transition-colors mr-3 text-xs font-medium">
-                      Upravit
-                    </button>
-                    <button onClick={() => handleDelete(c.id)} className="text-gray-400 hover:text-red-500 transition-colors text-xs font-medium">
-                      Smazat
-                    </button>
+                    {isAdmin && (
+                      <>
+                        <button onClick={() => openEdit(c)} className="text-gray-400 hover:text-[#F04E12] transition-colors mr-3 text-xs font-medium">
+                          Upravit
+                        </button>
+                        <button onClick={() => handleDelete(c.id)} className="text-gray-400 hover:text-red-500 transition-colors text-xs font-medium">
+                          Smazat
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { CompanyProfile } from '@/lib/types'
+import { useUserRole } from '@/lib/useUserRole'
 
 const EMPTY_FORM = {
   name: '',
@@ -31,6 +32,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
+  const { role } = useUserRole()
+  const isAdmin = role === 'admin'
 
   const loadProfiles = useCallback(async () => {
     setLoading(true)
@@ -132,15 +135,17 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold text-[#111111]">Nastavení</h1>
           <p className="text-gray-500 text-sm mt-1">Profily dodavatele pro fakturaci</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Přidat profil
-        </button>
+        {isAdmin && (
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Přidat profil
+          </button>
+        )}
       </div>
 
       {/* Profile cards */}
@@ -218,28 +223,30 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Right: actions */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {!p.is_default && (
+                  {isAdmin && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!p.is_default && (
+                        <button
+                          onClick={() => setDefault(p.id)}
+                          className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-[#F04E12] hover:text-[#F04E12] transition-colors"
+                        >
+                          Nastavit jako výchozí
+                        </button>
+                      )}
                       <button
-                        onClick={() => setDefault(p.id)}
-                        className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-[#F04E12] hover:text-[#F04E12] transition-colors"
+                        onClick={() => openEdit(p)}
+                        className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-300 hover:text-gray-700 transition-colors"
                       >
-                        Nastavit jako výchozí
+                        Upravit
                       </button>
-                    )}
-                    <button
-                      onClick={() => openEdit(p)}
-                      className="px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:border-gray-300 hover:text-gray-700 transition-colors"
-                    >
-                      Upravit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(p)}
-                      className="px-3 py-1.5 text-xs font-medium text-gray-400 border border-gray-200 rounded-lg hover:border-red-200 hover:text-red-500 transition-colors"
-                    >
-                      Smazat
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => handleDelete(p)}
+                        className="px-3 py-1.5 text-xs font-medium text-gray-400 border border-gray-200 rounded-lg hover:border-red-200 hover:text-red-500 transition-colors"
+                      >
+                        Smazat
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bank details */}
