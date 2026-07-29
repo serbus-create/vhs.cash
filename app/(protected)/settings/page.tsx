@@ -135,10 +135,21 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold text-[#111111]">Nastavení</h1>
           <p className="text-gray-500 text-sm mt-1">Profily dodavatele pro fakturaci</p>
         </div>
-        {isAdmin && (
+        {isAdmin ? (
           <button
             onClick={openAdd}
             className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Přidat profil
+          </button>
+        ) : (
+          <button
+            disabled
+            title="Tato akce vyžaduje roli administrátora"
+            className="flex items-center gap-2 bg-gray-100 text-gray-400 px-4 py-2.5 rounded-lg text-sm font-semibold cursor-not-allowed"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useUserRole } from '@/lib/useUserRole'
 import {
   formatCurrency,
   formatDate,
@@ -70,6 +71,8 @@ function czk(d: DashboardDoc) {
 
 export default function DashboardPage() {
   const supabase = createClient()
+  const { role } = useUserRole()
+  const isAdmin = role === 'admin'
   const now = new Date()
 
   const [docs, setDocs] = useState<DashboardDoc[]>([])
@@ -212,15 +215,28 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
-          <Link
-            href="/documents/new"
-            className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="hidden sm:inline">Nový dokument</span>
-          </Link>
+          {isAdmin ? (
+            <Link
+              href="/documents/new"
+              className="flex items-center gap-2 bg-[#F04E12] text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="hidden sm:inline">Nový dokument</span>
+            </Link>
+          ) : (
+            <button
+              disabled
+              title="Tato akce vyžaduje roli administrátora"
+              className="flex items-center gap-2 bg-gray-100 text-gray-400 px-4 py-2.5 rounded-lg text-sm font-semibold cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="hidden sm:inline">Nový dokument</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -367,9 +383,11 @@ export default function DashboardPage() {
           {recentDocs.length === 0 && (
             <div className="p-8 text-center text-gray-400 text-sm">
               Žádné dokumenty.{' '}
-              <Link href="/documents/new" className="text-[#F04E12] hover:underline">
-                Vytvořte první.
-              </Link>
+              {isAdmin && (
+                <Link href="/documents/new" className="text-[#F04E12] hover:underline">
+                  Vytvořte první.
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -427,9 +445,11 @@ export default function DashboardPage() {
                 <tr>
                   <td colSpan={6} className="px-6 py-16 text-center text-gray-400 text-sm">
                     Žádné dokumenty.{' '}
-                    <Link href="/documents/new" className="text-[#F04E12] hover:underline">
-                      Vytvořte první.
-                    </Link>
+                    {isAdmin && (
+                      <Link href="/documents/new" className="text-[#F04E12] hover:underline">
+                        Vytvořte první.
+                      </Link>
+                    )}
                   </td>
                 </tr>
               )}

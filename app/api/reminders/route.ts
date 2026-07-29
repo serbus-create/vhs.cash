@@ -37,6 +37,11 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    if (roleProfile?.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden — tato akce vyžaduje roli administrátora' }, { status: 403 })
+    }
+
     const body = await req.json() as {
       documentId: string
       level: ReminderLevel
