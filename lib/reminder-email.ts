@@ -309,7 +309,8 @@ function buildSignatureHtml(lang: Lang): string {
     </td>
   </tr>
   <tr><td style="padding-bottom:2px;"><a href="https://www.v-h-s.cz" style="color:#F04E12;text-decoration:none;">www.v-h-s.cz</a></td></tr>
-  <tr><td style="padding-bottom:24px;"><a href="mailto:info@v-h-s.cz" style="color:#F04E12;text-decoration:none;">info@v-h-s.cz</a></td></tr>
+  <tr><td style="padding-bottom:2px;"><a href="mailto:info@v-h-s.cz" style="color:#F04E12;text-decoration:none;">info@v-h-s.cz</a></td></tr>
+  <tr><td style="padding-bottom:24px;"><a href="tel:+420725468614" style="color:#F04E12;text-decoration:none;">+420 725 468 614</a></td></tr>
   <tr>
     <td style="font-size:11px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:16px;">
       ${i.aiNote}
