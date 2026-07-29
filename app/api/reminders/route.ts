@@ -41,11 +41,12 @@ export async function POST(req: NextRequest) {
       documentId: string
       level: ReminderLevel
       recipientEmail: string
+      replyTo?: string
       subject: string
       bodyText: string
     }
 
-    const { documentId, level, recipientEmail, subject, bodyText } = body
+    const { documentId, level, recipientEmail, replyTo, subject, bodyText } = body
     if (!documentId || !level || !recipientEmail || !subject || !bodyText) {
       return NextResponse.json({ error: 'Chybí povinné parametry' }, { status: 400 })
     }
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
     const { error: sendError } = await resend.emails.send({
       from: 'upominka@v-h-s.cz',
       to: recipientEmail,
-      replyTo: 'info@v-h-s.cz',
+      replyTo: replyTo ?? 'info@v-h-s.cz',
       subject,
       html: htmlContent,
       text: bodyText,

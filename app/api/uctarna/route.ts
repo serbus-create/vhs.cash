@@ -41,11 +41,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as {
       documentId: string
       recipientEmail: string
+      replyTo?: string
       subject: string
       bodyText: string
     }
 
-    const { documentId, recipientEmail, subject, bodyText } = body
+    const { documentId, recipientEmail, replyTo, subject, bodyText } = body
     if (!documentId || !recipientEmail || !subject || !bodyText) {
       return NextResponse.json({ error: 'Chybí povinné parametry' }, { status: 400 })
     }
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
     const { error: sendError } = await resend.emails.send({
       from: 'uctarna@v-h-s.cz',
       to: recipientEmail,
-      replyTo: 'info@v-h-s.cz',
+      replyTo: replyTo ?? 'info@v-h-s.cz',
       subject,
       html: htmlContent,
       text: bodyText,

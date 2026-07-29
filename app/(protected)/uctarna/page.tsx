@@ -41,6 +41,7 @@ interface ModalState {
   subject: string
   bodyText: string
   recipientEmail: string
+  replyTo: string
   qrCodeUrl: string | null
   profile: CompanyProfileInfo | null
 }
@@ -155,6 +156,7 @@ export default function UctarnaPage() {
       subject: getInvoiceEmailSubject(doc.number, lang),
       bodyText: getInvoiceEmailBodyText(vars, lang),
       recipientEmail: doc.clients?.email ?? '',
+      replyTo: 'info@v-h-s.cz',
       qrCodeUrl,
       profile,
     })
@@ -173,6 +175,7 @@ export default function UctarnaPage() {
         body: JSON.stringify({
           documentId: modal.doc.id,
           recipientEmail: modal.recipientEmail,
+          replyTo: modal.replyTo,
           subject: modal.subject,
           bodyText: modal.bodyText,
         }),
@@ -370,6 +373,27 @@ export default function UctarnaPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                   placeholder="email@klient.cz"
                 />
+              </div>
+
+              {/* Reply-to */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Odpovědi na</label>
+                <div className="flex gap-2">
+                  {(['info@v-h-s.cz', 'serbus@v-h-s.cz'] as const).map((addr) => (
+                    <button
+                      key={addr}
+                      type="button"
+                      onClick={() => setModal((m) => m ? { ...m, replyTo: addr } : m)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        modal.replyTo === addr
+                          ? 'bg-[#F04E12] text-white border-[#F04E12]'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {addr}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Subject */}

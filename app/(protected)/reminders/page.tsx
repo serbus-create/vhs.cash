@@ -43,6 +43,7 @@ interface ModalState {
   labels: ReminderLabels
   subject: string
   bodyText: string
+  replyTo: string
   qrCodeUrl: string | null
   paymentInfo: PaymentInfo | null
   qrLoading: boolean
@@ -210,6 +211,7 @@ export default function RemindersPage() {
       labels,
       subject: getReminderSubject(level, vars, lang),
       bodyText: getReminderBodyText(level, vars, lang),
+      replyTo: 'info@v-h-s.cz',
       qrCodeUrl: null,
       paymentInfo: null,
       qrLoading: true,
@@ -272,6 +274,7 @@ export default function RemindersPage() {
           documentId: modal.doc.id,
           level: modal.level,
           recipientEmail,
+          replyTo: modal.replyTo,
           subject: modal.subject,
           bodyText: modal.bodyText,
         }),
@@ -462,6 +465,27 @@ export default function RemindersPage() {
                   <span className="text-gray-500">Příjemce: </span>
                   <span className="font-medium text-[#111111]">{modal.doc.clients?.name}</span>
                   <span className="text-gray-500 ml-2">&lt;{modal.doc.clients?.email}&gt;</span>
+                </div>
+              </div>
+
+              {/* Reply-to */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Odpovědi na</label>
+                <div className="flex gap-2">
+                  {(['info@v-h-s.cz', 'serbus@v-h-s.cz'] as const).map((addr) => (
+                    <button
+                      key={addr}
+                      type="button"
+                      onClick={() => setModal((m) => m ? { ...m, replyTo: addr } : m)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        modal.replyTo === addr
+                          ? 'bg-[#F04E12] text-white border-[#F04E12]'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {addr}
+                    </button>
+                  ))}
                 </div>
               </div>
 
