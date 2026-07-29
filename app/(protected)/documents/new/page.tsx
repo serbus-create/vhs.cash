@@ -117,7 +117,7 @@ export default function NewDocumentPage() {
     setItems((prev) => prev.filter((it) => it.id !== id))
   }
 
-  const handleSave = async (status: 'draft' | 'sent') => {
+  const handleSave = async (status: 'draft' | 'issued' | 'sent') => {
     if (!number.trim()) { setError('Číslo dokumentu je povinné'); return }
     if (items.some((i) => !i.description.trim())) { setError('Každá položka musí mít popis'); return }
 
@@ -456,7 +456,7 @@ export default function NewDocumentPage() {
             Uložit jako koncept
           </button>
           <button
-            onClick={() => handleSave('sent')}
+            onClick={() => handleSave('issued')}
             disabled={saving}
             className="px-5 py-2.5 bg-[#F04E12] text-white rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-60"
           >

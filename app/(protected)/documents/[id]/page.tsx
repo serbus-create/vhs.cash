@@ -24,7 +24,8 @@ const newItem = (): LineItem => ({
 
 const STATUS_OPTIONS: { value: DocumentStatus; label: string }[] = [
   { value: 'draft', label: 'Koncept' },
-  { value: 'sent', label: 'Vydáno' },
+  { value: 'issued', label: 'Vydáno' },
+  { value: 'sent', label: 'Odesláno' },
   { value: 'paid', label: 'Zaplaceno' },
   { value: 'cancelled', label: 'Storno' },
 ]
