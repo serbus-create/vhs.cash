@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   formatCurrency,
@@ -29,12 +29,12 @@ interface AccountingDoc {
 type EntityFilter = 'all' | 'osvc' | 'sro'
 type Tab = 'faktury' | 'podklady'
 
-interface MockFile {
+interface DriveFile {
   id: string
   name: string
   size: number
-  type: string
-  uploadedAt: Date
+  mimeType: string
+  createdTime: string
 }
 
 // ---------- constants ----------
@@ -52,14 +52,18 @@ function monthLabel(year: number, month: number): string {
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
+function toYearMonth(d: { year: number; month: number }): string {
+  return `${d.year}-${String(d.month).padStart(2, '0')}`
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-function fileIcon(type: string) {
-  const isPdf = type === 'application/pdf'
+function fileIcon(mimeType: string) {
+  const isPdf = mimeType === 'application/pdf'
   if (isPdf) {
     return (
       <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
@@ -135,7 +139,11 @@ export default function AccountingPage() {
 
   // — Podklady tab state —
   const [podkladyNavDate, setPodkladyNavDate] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 })
-  const [mockFiles, setMockFiles] = useState<MockFile[]>([])
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([])
+  const [filesLoading, setFilesLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [downloadingZip, setDownloadingZip] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -188,14 +196,26 @@ export default function AccountingPage() {
     })
   }, [docs, navDate, entityFilter])
 
-  const filteredPodklady = useMemo(() => {
-    return mockFiles.filter((f) => {
-      const d = f.uploadedAt
-      return d.getFullYear() === podkladyNavDate.year && d.getMonth() + 1 === podkladyNavDate.month
-    })
-  }, [mockFiles, podkladyNavDate])
+  const fetchDriveFiles = useCallback(async () => {
+    const ym = toYearMonth(podkladyNavDate)
+    setFilesLoading(true)
+    try {
+      const res = await fetch(`/api/podklady/list?yearMonth=${ym}`)
+      const data = await res.json()
+      setDriveFiles(Array.isArray(data) ? data : [])
+    } catch {
+      setDriveFiles([])
+    } finally {
+      setFilesLoading(false)
+    }
+  }, [podkladyNavDate])
 
-  // ZIP download
+  useEffect(() => {
+    if (activeTab !== 'podklady') return
+    fetchDriveFiles()
+  }, [activeTab, fetchDriveFiles])
+
+  // ZIP download for Faktury
   const handleZipDownload = async () => {
     if (filtered.length === 0) return
     setDownloading(true)
@@ -227,23 +247,61 @@ export default function AccountingPage() {
     }
   }
 
-  // Mock file upload
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
-    const newFiles: MockFile[] = files.map((f) => ({
-      id: crypto.randomUUID(),
-      name: f.name,
-      size: f.size,
-      type: f.type,
-      uploadedAt: new Date(),
-    }))
-    setMockFiles((prev) => [...newFiles, ...prev])
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    const ym = toYearMonth(podkladyNavDate)
+    setUploading(true)
+    setUploadError('')
+    try {
+      await Promise.all(
+        files.map(async (file) => {
+          const fd = new FormData()
+          fd.append('file', file)
+          fd.append('yearMonth', ym)
+          const res = await fetch('/api/podklady/upload', { method: 'POST', body: fd })
+          if (!res.ok) {
+            const body = await res.text()
+            throw new Error(body)
+          }
+        }),
+      )
+      await fetchDriveFiles()
+    } catch (err) {
+      setUploadError(String(err))
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
-  const handleDeleteMockFile = (id: string) => {
-    setMockFiles((prev) => prev.filter((f) => f.id !== id))
+  const handleDeleteFile = async (fileId: string) => {
+    setDriveFiles((prev) => prev.filter((f) => f.id !== fileId))
+    try {
+      await fetch(`/api/podklady/delete?fileId=${encodeURIComponent(fileId)}`, { method: 'DELETE' })
+    } catch {
+      await fetchDriveFiles()
+    }
+  }
+
+  const handlePodkladyZipDownload = async () => {
+    const ym = toYearMonth(podkladyNavDate)
+    setDownloadingZip(true)
+    try {
+      const res = await fetch(`/api/podklady/download-zip?yearMonth=${ym}`)
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `podklady-${ym}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloadingZip(false)
+    }
   }
 
   // ---------- render ----------
@@ -439,12 +497,9 @@ export default function AccountingPage() {
                 <p className="text-sm text-gray-500 mt-1">
                   Nahrávejte sem faktury od dodavatelů, výpisy z banky, účtenky a další podklady pro měsíční uzávěrku.
                 </p>
-                <p className="text-xs text-gray-400 mt-2 flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Soubory se zatím neukládají trvale — připravujeme napojení na Google Disk.
-                </p>
+                {uploadError && (
+                  <p className="text-xs text-red-600 mt-2">{uploadError}</p>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {/* Upload button */}
@@ -458,29 +513,39 @@ export default function AccountingPage() {
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#F04E12] text-white rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
+                  disabled={uploading}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#F04E12] text-white rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  Nahrát soubor
+                  {uploading ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                  )}
+                  {uploading ? 'Nahrávám…' : 'Nahrát soubor'}
                 </button>
-                {/* Download all — disabled, upcoming */}
-                <div className="relative group">
-                  <button
-                    disabled
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-400 rounded-lg text-sm font-semibold cursor-not-allowed"
-                  >
+                {/* Download all as ZIP */}
+                <button
+                  onClick={handlePodkladyZipDownload}
+                  disabled={downloadingZip || driveFiles.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {downloadingZip ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    Stáhnout vše
-                  </button>
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    Bude dostupné po napojení Google Disku
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-                  </div>
-                </div>
+                  )}
+                  {downloadingZip ? 'Generuji…' : 'Stáhnout vše'}
+                </button>
               </div>
             </div>
           </div>
@@ -489,15 +554,21 @@ export default function AccountingPage() {
           <div className="flex items-center gap-4">
             <MonthNav navDate={podkladyNavDate} onPrev={goPodkladyPrev} onNext={goPodkladyNext} />
             <span className="text-sm text-gray-400">
-              {filteredPodklady.length === 0
+              {filesLoading
+                ? 'Načítám…'
+                : driveFiles.length === 0
                 ? 'Žádné soubory pro tento měsíc'
-                : `${filteredPodklady.length} soubor${filteredPodklady.length === 1 ? '' : filteredPodklady.length < 5 ? 'y' : 'ů'}`}
+                : `${driveFiles.length} soubor${driveFiles.length === 1 ? '' : driveFiles.length < 5 ? 'y' : 'ů'}`}
             </span>
           </div>
 
           {/* File list */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            {filteredPodklady.length === 0 ? (
+            {filesLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <p className="text-gray-400 text-sm">Načítám…</p>
+              </div>
+            ) : driveFiles.length === 0 ? (
               <div className="py-16 text-center">
                 <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mx-auto mb-3">
                   <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -526,34 +597,45 @@ export default function AccountingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {filteredPodklady.map((f) => (
+                  {driveFiles.map((f) => (
                     <tr key={f.id} className="hover:bg-gray-50/60 transition-colors">
                       <td className="px-6 py-3.5">
                         <div className="flex items-center gap-3">
-                          {fileIcon(f.type)}
+                          {fileIcon(f.mimeType)}
                           <span className="font-medium text-[#111111] truncate max-w-[280px]">{f.name}</span>
                         </div>
                       </td>
                       <td className="px-6 py-3.5 text-gray-500 text-xs font-mono uppercase">
-                        {f.type === 'application/pdf' ? 'PDF' : f.type.split('/')[1]?.toUpperCase() ?? f.type}
+                        {f.mimeType === 'application/pdf' ? 'PDF' : f.mimeType.split('/')[1]?.toUpperCase() ?? f.mimeType}
                       </td>
                       <td className="px-6 py-3.5 text-gray-500 text-xs">{formatFileSize(f.size)}</td>
                       <td className="px-6 py-3.5 text-gray-500 text-xs whitespace-nowrap">
-                        {f.uploadedAt.toLocaleString('cs-CZ', {
+                        {new Date(f.createdTime).toLocaleString('cs-CZ', {
                           day: '2-digit', month: '2-digit', year: 'numeric',
                           hour: '2-digit', minute: '2-digit',
                         })}
                       </td>
                       <td className="px-6 py-3.5 text-right">
-                        <button
-                          onClick={() => handleDeleteMockFile(f.id)}
-                          className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded"
-                          title="Odebrat"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <a
+                            href={`/api/podklady/download?fileId=${encodeURIComponent(f.id)}`}
+                            className="p-1.5 text-gray-300 hover:text-blue-500 transition-colors rounded"
+                            title="Stáhnout"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          </a>
+                          <button
+                            onClick={() => handleDeleteFile(f.id)}
+                            className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded"
+                            title="Odebrat"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

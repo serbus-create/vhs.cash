@@ -1,0 +1,15 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { findMonthFolder, listFiles } from '@/lib/google-drive'
+
+export async function GET(req: NextRequest) {
+  try {
+    const yearMonth = req.nextUrl.searchParams.get('yearMonth') ?? new Date().toISOString().slice(0, 7)
+    const folderId = await findMonthFolder(yearMonth)
+    if (!folderId) return NextResponse.json([])
+    const files = await listFiles(folderId)
+    return NextResponse.json(files)
+  } catch (err) {
+    console.error('Drive list error:', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
+}
