@@ -71,7 +71,6 @@ function czk(d: DashboardDoc) {
 export default function DashboardPage() {
   const supabase = createClient()
   const now = new Date()
-  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 
   const [docs, setDocs] = useState<DashboardDoc[]>([])
   const [loading, setLoading] = useState(true)
@@ -112,36 +111,27 @@ export default function DashboardPage() {
     })
   }, [entityFiltered, selectedMonths, selectedYears])
 
-  // KPI — "tento měsíc" cards (entity filter only, fixed to current month)
-  const thisMonthDocs = useMemo(
-    () => entityFiltered.filter((d) => d.issue_date && d.issue_date >= firstOfMonth),
-    [entityFiltered, firstOfMonth],
-  )
-  const kpiThisMonth = useMemo(
-    () => thisMonthDocs
-      .filter((d) => d.type === 'faktura')
-      .reduce((s, d) => s + czk(d), 0),
-    [thisMonthDocs],
-  )
-  const kpiDocCount = thisMonthDocs.length
-
-  // KPI — financial cards (period filtered)
+  // KPI — all cards use periodFiltered (entity + period filter)
   const kpiPaid = useMemo(
     () => periodFiltered
-      .filter((d) => getDisplayStatus(d.status, d.due_date) === 'paid')
+      .filter((d) => d.type === 'faktura' && getDisplayStatus(d.status, d.due_date) === 'paid')
       .reduce((s, d) => s + czk(d), 0),
     [periodFiltered],
   )
   const kpiPending = useMemo(
     () => periodFiltered
-      .filter((d) => ['issued', 'sent'].includes(getDisplayStatus(d.status, d.due_date)))
+      .filter((d) => d.type === 'faktura' && ['issued', 'sent', 'overdue'].includes(getDisplayStatus(d.status, d.due_date)))
       .reduce((s, d) => s + czk(d), 0),
     [periodFiltered],
   )
   const kpiOverdue = useMemo(
     () => periodFiltered
-      .filter((d) => getDisplayStatus(d.status, d.due_date) === 'overdue')
+      .filter((d) => d.type === 'faktura' && getDisplayStatus(d.status, d.due_date) === 'overdue')
       .reduce((s, d) => s + czk(d), 0),
+    [periodFiltered],
+  )
+  const kpiDocCount = useMemo(
+    () => periodFiltered.filter((d) => d.type === 'faktura').length,
     [periodFiltered],
   )
 
@@ -322,13 +312,12 @@ export default function DashboardPage() {
         </ResponsiveContainer>
       </div>
 
-      {/* 5 KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Vyfakturováno tento měsíc" value={formatCurrency(kpiThisMonth)} accent />
+      {/* 4 KPI cards — all driven by entity + period filter */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Zaplaceno" value={formatCurrency(kpiPaid)} color="green" />
         <StatCard label="K úhradě" value={formatCurrency(kpiPending)} color="blue" />
         <StatCard label="Po splatnosti" value={formatCurrency(kpiOverdue)} color="orange" />
-        <StatCard label="Dokumenty tento měsíc" value={String(kpiDocCount)} color="gray" />
+        <StatCard label="Dokumenty" value={String(kpiDocCount)} color="gray" />
       </div>
 
       {/* Overdue banner */}
