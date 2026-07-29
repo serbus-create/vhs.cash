@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useUserRole } from '@/lib/useUserRole'
 
 const navItems = [
   {
@@ -73,6 +74,8 @@ const navItems = [
 export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { role } = useUserRole()
+  const isAdmin = role === 'admin'
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -124,18 +127,20 @@ export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: (
       </nav>
 
       {/* New document shortcut */}
-      <div className="px-3 pb-3">
-        <Link
-          href="/documents/new"
-          onClick={onClose}
-          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium border border-[#F04E12]/40 text-[#F04E12] hover:bg-[#F04E12]/10 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nový dokument
-        </Link>
-      </div>
+      {isAdmin && (
+        <div className="px-3 pb-3">
+          <Link
+            href="/documents/new"
+            onClick={onClose}
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium border border-[#F04E12]/40 text-[#F04E12] hover:bg-[#F04E12]/10 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nový dokument
+          </Link>
+        </div>
+      )}
 
       {/* Logout */}
       <div className="p-3 border-t border-white/10">

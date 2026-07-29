@@ -170,9 +170,11 @@ export default function SettingsPage() {
             </svg>
           </div>
           <p className="text-gray-400 text-sm mb-4">Žádné profily dodavatele.</p>
-          <button onClick={openAdd} className="text-[#F04E12] text-sm font-medium hover:underline">
-            Přidat první profil
-          </button>
+          {isAdmin && (
+            <button onClick={openAdd} className="text-[#F04E12] text-sm font-medium hover:underline">
+              Přidat první profil
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4">
