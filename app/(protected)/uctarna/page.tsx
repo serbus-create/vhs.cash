@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useUserRole } from '@/lib/useUserRole'
 import {
   getInvoiceEmailSubject,
   getInvoiceEmailBodyText,
@@ -70,6 +71,8 @@ function buildQrUrl(profile: CompanyProfileInfo, vars: { amount: number; currenc
 
 export default function UctarnaPage() {
   const supabase = createClient()
+  const { role } = useUserRole()
+  const isAdmin = role === 'admin'
   const [docs, setDocs] = useState<IssuedInvoice[]>([])
   const [profiles, setProfiles] = useState<Record<string, CompanyProfileInfo>>({})
   const [loading, setLoading] = useState(true)
@@ -258,15 +261,17 @@ export default function UctarnaPage() {
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-sm font-bold text-[#111111]">{formatCurrency(amount)}</span>
                       </div>
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => openModal(doc)}
-                          disabled={noEmail}
-                          className="flex-1 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40"
-                        >
-                          Poslat fakturu
-                        </button>
-                      </div>
+                      {isAdmin && (
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => openModal(doc)}
+                            disabled={noEmail}
+                            className="flex-1 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40"
+                          >
+                            Poslat fakturu
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -314,45 +319,47 @@ export default function UctarnaPage() {
                           )}
                         </td>
                         <td className="px-6 py-3.5">
-                          <div className="flex items-center gap-2 justify-end">
-                            <button
-                              onClick={() => openModal(doc)}
-                              disabled={noEmail}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                              title={noEmail ? 'Klient nemá zadaný e-mail' : undefined}
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                              Poslat fakturu
-                            </button>
-
-                            {isConfirming ? (
-                              <div className="flex items-center gap-1">
-                                <span className="text-xs text-gray-500 whitespace-nowrap">Opravdu?</span>
-                                <button
-                                  onClick={() => handleMarkSent(doc.id)}
-                                  disabled={isMarking}
-                                  className="px-2 py-1.5 bg-gray-700 text-white rounded-lg text-xs font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50"
-                                >
-                                  {isMarking ? '…' : 'Ano'}
-                                </button>
-                                <button
-                                  onClick={() => setConfirmId(null)}
-                                  className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-                                >
-                                  Ne
-                                </button>
-                              </div>
-                            ) : (
+                          {isAdmin && (
+                            <div className="flex items-center gap-2 justify-end">
                               <button
-                                onClick={() => setConfirmId(doc.id)}
-                                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 transition-colors whitespace-nowrap"
+                                onClick={() => openModal(doc)}
+                                disabled={noEmail}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                                title={noEmail ? 'Klient nemá zadaný e-mail' : undefined}
                               >
-                                Odešlu si sám
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                Poslat fakturu
                               </button>
-                            )}
-                          </div>
+
+                              {isConfirming ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">Opravdu?</span>
+                                  <button
+                                    onClick={() => handleMarkSent(doc.id)}
+                                    disabled={isMarking}
+                                    className="px-2 py-1.5 bg-gray-700 text-white rounded-lg text-xs font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50"
+                                  >
+                                    {isMarking ? '…' : 'Ano'}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmId(null)}
+                                    className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+                                  >
+                                    Ne
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmId(doc.id)}
+                                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 transition-colors whitespace-nowrap"
+                                >
+                                  Odešlu si sám
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )

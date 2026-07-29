@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useUserRole } from '@/lib/useUserRole'
 import {
   getReminderSubject,
   getReminderBodyText,
@@ -125,6 +126,8 @@ async function fetchQrCode(params: {
 
 export default function RemindersPage() {
   const supabase = createClient()
+  const { role } = useUserRole()
+  const isAdmin = role === 'admin'
   const [docs, setDocs] = useState<OverdueDoc[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<ModalState | null>(null)
@@ -370,13 +373,15 @@ export default function RemindersPage() {
                             Upomínka: {new Date(lastSent.sentAt).toLocaleDateString('cs-CZ')}
                           </p>
                         )}
-                        <button
-                          onClick={() => openModal(doc)}
-                          disabled={noEmail}
-                          className="w-full mt-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40"
-                        >
-                          Poslat upomínku
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => openModal(doc)}
+                            disabled={noEmail}
+                            className="w-full mt-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40"
+                          >
+                            Poslat upomínku
+                          </button>
+                        )}
                       </div>
                     )
                   })}
@@ -440,17 +445,19 @@ export default function RemindersPage() {
                             )}
                           </td>
                           <td className="px-6 py-3.5 text-right">
-                            <button
-                              onClick={() => openModal(doc)}
-                              disabled={noEmail}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                              title={noEmail ? 'Klient nemá zadaný e-mail' : undefined}
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                              Poslat upomínku
-                            </button>
+                            {isAdmin && (
+                              <button
+                                onClick={() => openModal(doc)}
+                                disabled={noEmail}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                                title={noEmail ? 'Klient nemá zadaný e-mail' : undefined}
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                Poslat upomínku
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )
