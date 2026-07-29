@@ -69,25 +69,48 @@ export default function NewDocumentPage() {
       })
   }, [])
 
-  // Generate document number and auto-populate variable symbol on type change
-  const generateNumber = useCallback(async (type: string) => {
+  // Generate document number and auto-populate variable symbol on type/profile change
+  const generateNumber = useCallback(async (type: string, profileId: string) => {
     const { data: { user } } = await supabase.auth.getUser()
     const year = new Date().getFullYear()
-    const { count } = await supabase
-      .from('documents')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user!.id)
-      .eq('type', type)
-      .gte('created_at', `${year}-01-01`)
-    const seq = String((count ?? 0) + 1).padStart(4, '0')
-    const num = `${TYPE_PREFIX[type]}-${year}-${seq}`
+    const prefix = TYPE_PREFIX[type]
+
+    let seq: string
+    if (type === 'faktura' && profileId) {
+      const profile = companyProfiles.find((p) => p.id === profileId)
+      // OSVČ → 1xxx series (1001–1999), s.r.o. → 2xxx series (2001–2999)
+      const rangeStart = profile?.profile_type === 'sro' ? 2000 : 1000
+
+      const { data: existing } = await supabase
+        .from('documents')
+        .select('number')
+        .eq('user_id', user!.id)
+        .eq('type', 'faktura')
+        .like('number', `FA-${year}-%`)
+
+      const nums = (existing ?? [])
+        .map((d) => parseInt(d.number.split('-')[2] ?? '0', 10))
+        .filter((n) => n > rangeStart && n < rangeStart + 1000)
+
+      const next = nums.length > 0 ? Math.max(...nums) + 1 : rangeStart + 1
+      seq = String(next).padStart(4, '0')
+    } else {
+      const { count } = await supabase
+        .from('documents')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user!.id)
+        .eq('type', type)
+        .gte('created_at', `${year}-01-01`)
+      seq = String((count ?? 0) + 1).padStart(4, '0')
+    }
+
+    const num = `${prefix}-${year}-${seq}`
     setNumber(num)
-    // Reset manual override on type change so VS tracks the new number
     vsManuallyEdited.current = false
     setVariableSymbol(numericPart(num))
-  }, [])
+  }, [companyProfiles])
 
-  useEffect(() => { generateNumber(docType) }, [docType, generateNumber])
+  useEffect(() => { generateNumber(docType, companyProfileId) }, [docType, companyProfileId, generateNumber])
 
   // When user edits the number field manually, keep VS in sync unless overridden
   const handleNumberChange = (val: string) => {
