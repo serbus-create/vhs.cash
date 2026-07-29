@@ -31,6 +31,7 @@ interface InvoiceEmailI18n {
   signGreeting: string
   signTitle: string
   signCompanyPrep: string
+  aiNote: string
 }
 
 const i18nCs: InvoiceEmailI18n = {
@@ -55,6 +56,7 @@ const i18nCs: InvoiceEmailI18n = {
   signGreeting: 'S pozdravem',
   signTitle: 'Referentka oddělení vděčnosti',
   signCompanyPrep: 've společnosti',
+  aiNote: 'Tento e-mail vygeneroval AI systém vhs. — VHSka,<br>který doručí každou fakturu tam, kam patří.',
 }
 
 const i18nDe: InvoiceEmailI18n = {
@@ -79,6 +81,7 @@ const i18nDe: InvoiceEmailI18n = {
   signGreeting: 'Mit freundlichen Grüßen',
   signTitle: 'Referentin der Dankbarkeitsabteilung',
   signCompanyPrep: 'im Auftrag von',
+  aiNote: 'Diese E-Mail wurde vom KI-System vhs. — VHSka generiert,<br>das jede Rechnung dorthin bringt, wo sie hingehört.',
 }
 
 const i18nPl: InvoiceEmailI18n = {
@@ -103,6 +106,7 @@ const i18nPl: InvoiceEmailI18n = {
   signGreeting: 'Z poważaniem',
   signTitle: 'Referentka działu wdzięczności',
   signCompanyPrep: 'w imieniu firmy',
+  aiNote: 'Ta wiadomość została wygenerowana przez system AI vhs. — VHSka,<br>który dostarczy każdą fakturę tam, gdzie jej miejsce.',
 }
 
 const INVOICE_EMAIL_I18N: Record<Lang, InvoiceEmailI18n> = { cs: i18nCs, sk: i18nCs, de: i18nDe, pl: i18nPl }
@@ -193,6 +197,11 @@ function buildSignature(lang: Lang): string {
   </tr>
   <tr><td style="padding-bottom:2px;"><a href="https://www.v-h-s.cz" style="color:#F04E12;text-decoration:none;">www.v-h-s.cz</a></td></tr>
   <tr><td style="padding-bottom:24px;"><a href="mailto:info@v-h-s.cz" style="color:#F04E12;text-decoration:none;">info@v-h-s.cz</a></td></tr>
+  <tr>
+    <td style="font-size:11px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:16px;">
+      ${i.aiNote}
+    </td>
+  </tr>
 </table>
 `
 }
