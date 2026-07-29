@@ -365,7 +365,7 @@ export default function EditDocumentPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Předmět</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Objednávka</label>
               <input
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}

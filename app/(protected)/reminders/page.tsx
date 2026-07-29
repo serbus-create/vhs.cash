@@ -467,7 +467,7 @@ export default function RemindersPage() {
 
               {/* Subject */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Předmět</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Objednávka</label>
                 <input
                   value={modal.subject}
                   onChange={(e) => setModal((m) => m ? { ...m, subject: e.target.value } : m)}

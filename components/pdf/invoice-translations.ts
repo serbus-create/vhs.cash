@@ -65,7 +65,7 @@ const cs: InvoiceTranslations = {
   objednatel: 'Objednatel',
   ico: 'IČO',
   dic: 'DIČ',
-  predmet: 'Předmět',
+  predmet: 'Objednávka',
   colNum: '#',
   colPopis: 'Popis',
   colPocet: 'Počet',

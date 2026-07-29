@@ -183,7 +183,7 @@ export function generateInvoiceHtml(params: {
 
 <!-- ── ITEMS TABLE ───────────────────────────────────────── -->
 <div style="padding:0 32px;">
-  ${doc.subject ? `<p style="font-size:9pt;color:#555;margin-bottom:10px;padding:0 4px;">Předmět: ${esc(doc.subject)}</p>` : ''}
+  ${doc.subject ? `<p style="font-size:9pt;color:#555;margin-bottom:10px;padding:0 4px;">Objednávka: ${esc(doc.subject)}</p>` : ''}
   <table style="width:100%;border-collapse:collapse;">
     <thead>
       <tr>
