@@ -139,9 +139,9 @@ export default function ClientsPage() {
   const lookupBtnLabel = country === 'CZ' ? 'Hledat ARES' : 'Hledat VIES'
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#111111]">Klienti</h1>
           <p className="text-gray-500 text-sm mt-1">{clients.length} klientů</p>
@@ -173,6 +173,34 @@ export default function ClientsPage() {
             )}
           </div>
         ) : (
+          <>
+            {/* Mobile card list */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {clients.map((c) => (
+                <div key={c.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[#111111] text-sm truncate">{c.name}</p>
+                      {c.city && <p className="text-xs text-gray-500 mt-0.5">{c.city}</p>}
+                      {c.email && <p className="text-xs text-gray-500">{c.email}</p>}
+                      {c.ico && <p className="text-xs text-gray-400 font-mono mt-1">IČO: {c.ico}</p>}
+                    </div>
+                    {isAdmin && (
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => openEdit(c)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                          Upravit
+                        </button>
+                        <button onClick={() => handleDelete(c.id)} className="px-3 py-1.5 border border-red-100 rounded-lg text-xs font-medium text-red-400 hover:bg-red-50 transition-colors">
+                          Smazat
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
@@ -208,6 +236,8 @@ export default function ClientsPage() {
               ))}
             </tbody>
           </table>
+            </div>
+          </>
         )}
       </div>
 

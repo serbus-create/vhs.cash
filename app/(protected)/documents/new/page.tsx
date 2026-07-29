@@ -209,7 +209,7 @@ export default function NewDocumentPage() {
   }
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-4 md:p-8 max-w-4xl">
       {/* Header */}
       <div className="mb-8 flex items-center gap-4">
         <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -224,7 +224,7 @@ export default function NewDocumentPage() {
         {/* Basic info */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <h2 className="text-sm font-semibold text-[#111111] mb-4 uppercase tracking-wide">Základní informace</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Typ dokumentu</label>
@@ -370,7 +370,7 @@ export default function NewDocumentPage() {
             <h2 className="text-sm font-semibold text-[#111111] uppercase tracking-wide">Položky</h2>
           </div>
 
-          <div className="grid grid-cols-[2fr_80px_120px_80px_110px_36px] gap-2 px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="hidden md:grid grid-cols-[2fr_80px_120px_80px_110px_36px] gap-2 px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide">
             <span>Popis</span>
             <span>Počet</span>
             <span>Cena/ks (bez DPH)</span>
@@ -383,7 +383,67 @@ export default function NewDocumentPage() {
             {items.map((item, idx) => {
               const lineTotal = item.quantity * item.unitPrice * (1 + item.vatRate / 100)
               return (
-                <div key={item.id} className="grid grid-cols-[2fr_80px_120px_80px_110px_36px] gap-2 px-6 py-3 items-center">
+                <div key={item.id}>
+                  {/* Mobile item card */}
+                  <div className="md:hidden p-4 border-b border-gray-100">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs text-gray-500 font-medium">Položka {idx + 1}</span>
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        disabled={items.length === 1}
+                        className="text-gray-300 hover:text-red-400 transition-colors disabled:opacity-20"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <input
+                      value={item.description}
+                      onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                      placeholder={`Popis položky`}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12] mb-3"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Počet</label>
+                        <input
+                          type="number" min="0" step="0.001"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Cena/ks</label>
+                        <input
+                          type="number" min="0" step="0.01"
+                          value={item.unitPrice}
+                          onChange={(e) => updateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">DPH %</label>
+                        <select
+                          value={item.vatRate}
+                          onChange={(e) => updateItem(item.id, 'vatRate', parseFloat(e.target.value))}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                        >
+                          <option value={0}>0 %</option>
+                          <option value={12}>12 %</option>
+                          <option value={21}>21 %</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex justify-end mt-2">
+                      <span className="text-sm font-medium text-[#111111]">
+                        = {formatCurrency(item.quantity * item.unitPrice * (1 + item.vatRate / 100), currency)}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Desktop item row */}
+                  <div className="hidden md:grid grid-cols-[2fr_80px_120px_80px_110px_36px] gap-2 px-6 py-3 items-center">
                   <input
                     value={item.description}
                     onChange={(e) => updateItem(item.id, 'description', e.target.value)}
@@ -423,6 +483,7 @@ export default function NewDocumentPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
+                  </div>
                 </div>
               )
             })}

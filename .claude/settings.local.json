@@ -10,7 +10,24 @@
       "Bash(grep -E \"^jszip$|^recharts$\")",
       "Bash(echo \"Exit: $?\")",
       "Bash(echo \"PID: $!\")",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(npx supabase *)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(lsof -i :3000 -sTCP:LISTEN)",
+      "Bash(npx playwright *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(node *)",
+      "Bash(npm list *)",
+      "Bash(npx --yes playwright --version)",
+      "Bash(lsof -i :9222 -sTCP:LISTEN)",
+      "Bash(curl -s 'https://braijsasdqmnwsziimgk.supabase.co/rest/v1/company_profiles?select=id,name,profile_type&limit=5' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJyYWlqc2FzZHFtbndzemlpbWdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDE0MjEsImV4cCI6MjA5NjA3NzQyMX0.aYVSiWleQfHDs_e7PHRJeZUR_PzaOn5euvQa41j6uyg' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJyYWlqc2FzZHFtbndzemlpbWdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDE0MjEsImV4cCI6MjA5NjA3NzQyMX0.aYVSiWleQfHDs_e7PHRJeZUR_PzaOn5euvQa41j6uyg')",
+      "Bash(curl *)",
+      "Bash(xargs strings)",
+      "Bash(npm uninstall *)",
+      "Bash(VHS_EMAIL=\"info@v-h-s.cz\" VHS_PASS=\"Lenovo2017\" node verify-numbering.mjs)",
+      "Bash(awk 'NR>1 {print $2}')",
+      "Bash(xargs kill -9)"
     ]
   }
 }

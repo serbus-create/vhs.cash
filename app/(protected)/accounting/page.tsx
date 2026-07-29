@@ -249,7 +249,7 @@ export default function AccountingPage() {
   // ---------- render ----------
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <div className="p-4 md:p-8 max-w-6xl space-y-6">
       <h1 className="text-2xl font-bold text-[#111111]">Účetnictví</h1>
 
       {/* Tabs */}
@@ -273,7 +273,7 @@ export default function AccountingPage() {
       {activeTab === 'faktury' && (
         <>
           {/* Controls row */}
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
             <MonthNav navDate={navDate} onPrev={goPrev} onNext={goNext} />
 
             {/* Entity filter */}
@@ -328,7 +328,42 @@ export default function AccountingPage() {
                 <p className="text-gray-400 text-sm">Načítám…</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                {/* Mobile card list */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {filtered.length > 0 ? filtered.map((doc) => {
+                    const ds = getDisplayStatus(doc.status, doc.due_date)
+                    const czk = doc.amount_czk ?? doc.total_with_vat
+                    const isPartial = doc.paid_amount != null && doc.paid_amount < czk
+                    return (
+                      <div key={doc.id} className="p-4">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <span className="font-semibold text-[#F04E12] text-sm">{doc.number}</span>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ds] ?? 'bg-gray-100 text-gray-600'}`}>
+                            {STATUS_LABELS[ds] ?? ds}
+                          </span>
+                        </div>
+                        <p className="text-sm text-[#111111]">{doc.clients?.name ?? '—'}</p>
+                        <p className="text-xs text-gray-500">{doc.company_profiles?.name ?? '—'}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className={`text-sm font-bold ${isPartial ? 'text-gray-400 line-through' : 'text-[#111111]'}`}>
+                            {formatCurrency(czk)}
+                          </span>
+                          <span className="text-xs text-gray-400">{formatDate(doc.due_date)}</span>
+                        </div>
+                        {isPartial && (
+                          <p className="text-xs text-[#F04E12] font-semibold mt-0.5">{formatCurrency(doc.paid_amount!)} zaplaceno</p>
+                        )}
+                      </div>
+                    )
+                  }) : (
+                    <div className="p-8 text-center text-gray-400 text-sm">
+                      Žádné faktury pro {monthLabel(navDate.year, navDate.month).toLowerCase()}.
+                    </div>
+                  )}
+                </div>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
@@ -386,7 +421,8 @@ export default function AccountingPage() {
                     )}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </div>
         </>

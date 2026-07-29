@@ -207,7 +207,7 @@ export default function UctarnaPage() {
   // ---------- render ----------
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <div className="p-4 md:p-8 max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#111111]">Účtárna</h1>
         {!loading && (
@@ -240,6 +240,39 @@ export default function UctarnaPage() {
             </h2>
 
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              {/* Mobile card list */}
+              <div className="md:hidden divide-y divide-gray-100">
+                {group.map((doc) => {
+                  const amount = doc.amount_czk ?? doc.total_with_vat
+                  const profileName = doc.company_profile_id ? (profiles[doc.company_profile_id]?.name ?? '—') : '—'
+                  const noEmail = !doc.clients?.email
+                  return (
+                    <div key={doc.id} className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <span className="font-semibold text-[#F04E12] text-sm">{doc.number}</span>
+                        <span className="text-xs text-gray-400">{formatDate(doc.due_date)}</span>
+                      </div>
+                      <p className="text-sm font-medium text-[#111111]">{doc.clients?.name ?? '—'}</p>
+                      <p className="text-xs text-gray-500">{profileName}</p>
+                      {noEmail && <p className="text-xs text-amber-600 mt-0.5">Chybí e-mail klienta</p>}
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-sm font-bold text-[#111111]">{formatCurrency(amount)}</span>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => openModal(doc)}
+                          disabled={noEmail}
+                          className="flex-1 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40"
+                        >
+                          Poslat fakturu
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
@@ -326,6 +359,7 @@ export default function UctarnaPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         ))

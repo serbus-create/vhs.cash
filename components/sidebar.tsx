@@ -70,7 +70,7 @@ const navItems = [
   },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ open, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -82,7 +82,12 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 bg-[#111111] flex flex-col shrink-0">
+    <aside className={`fixed inset-y-0 left-0 z-50 w-60 bg-[#111111] flex flex-col shrink-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:z-auto ${open ? 'translate-x-0' : '-translate-x-full'}`}>
+      <button onClick={onClose} className="md:hidden absolute top-3 right-3 p-1.5 rounded-lg text-gray-400 hover:text-white transition-colors">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
       {/* Logo */}
       <div className="p-5 border-b border-white/10">
         <div className="flex items-center gap-3">
@@ -104,6 +109,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 active
                   ? 'bg-[#F04E12] text-white'
@@ -121,6 +127,7 @@ export default function Sidebar() {
       <div className="px-3 pb-3">
         <Link
           href="/documents/new"
+          onClick={onClose}
           className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium border border-[#F04E12]/40 text-[#F04E12] hover:bg-[#F04E12]/10 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

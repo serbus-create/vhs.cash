@@ -118,7 +118,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 md:p-8 max-w-7xl">
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
@@ -139,7 +139,7 @@ export default function DocumentsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-6">
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
@@ -192,6 +192,71 @@ export default function DocumentsPage() {
             </Link>
           </div>
         ) : (
+          <>
+            {/* Mobile card list */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {documents.map((doc) => {
+                const ds = getDisplayStatus(doc.status, doc.due_date)
+                const total = doc.total_with_vat ?? 0
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => router.push(`/documents/${doc.id}`)}
+                    className="p-4 hover:bg-orange-50/40 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <span className="font-semibold text-[#F04E12] text-sm">{doc.number}</span>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ds] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {STATUS_LABELS[ds] ?? doc.status}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium text-[#111111]">{(doc.clients as any)?.name ?? '—'}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{TYPE_LABELS[doc.type] ?? doc.type}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-sm font-bold text-[#111111]">{formatCurrency(total, doc.currency)}</span>
+                      <span className="text-xs text-gray-400">
+                        {doc.due_date ? `Spl. ${formatDate(doc.due_date)}` : formatDate(doc.issue_date)}
+                      </span>
+                    </div>
+                    {isAdmin && (
+                      <div className="flex gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                        {doc.type === 'faktura' && (
+                          <button
+                            onClick={() => openPaymentModal(doc)}
+                            className="flex-1 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                          >
+                            Platba
+                          </button>
+                        )}
+                        <button
+                          onClick={() => router.push(`/documents/${doc.id}`)}
+                          className="flex-1 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                          Upravit
+                        </button>
+                        <button
+                          onClick={() => downloadPdf(doc)}
+                          disabled={downloadingId === doc.id}
+                          className="flex-1 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+                        >
+                          {downloadingId === doc.id ? '…' : 'PDF'}
+                        </button>
+                        <button
+                          onClick={() => deleteDoc(doc.id)}
+                          className="py-1.5 px-2 border border-gray-200 rounded-lg text-xs font-medium text-red-400 hover:bg-red-50 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
@@ -357,6 +422,8 @@ export default function DocumentsPage() {
               ))}
             </tbody>
           </table>
+            </div>
+          </>
         )}
       </div>
       {/* Payment modal */}

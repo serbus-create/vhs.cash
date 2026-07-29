@@ -186,9 +186,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-8 max-w-7xl space-y-6">
+    <div className="p-4 md:p-8 max-w-7xl space-y-6">
       {/* Header + entity filter */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#111111]">Přehled</h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -219,7 +219,7 @@ export default function DashboardPage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Nový dokument
+            <span className="hidden sm:inline">Nový dokument</span>
           </Link>
         </div>
       </div>
@@ -343,7 +343,38 @@ export default function DashboardPage() {
             Zobrazit vše →
           </Link>
         </div>
-        <div className="overflow-x-auto">
+        {/* Mobile card list */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {recentDocs.map((doc) => {
+            const ds = getDisplayStatus(doc.status, doc.due_date)
+            const total = czk(doc)
+            return (
+              <div key={doc.id} className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <span className="font-medium text-[#F04E12] text-sm">{doc.number}</span>
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ds] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {STATUS_LABELS[ds] ?? ds}
+                  </span>
+                </div>
+                <p className="text-sm font-medium text-[#111111]">{doc.clients?.name ?? '—'}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm font-bold text-[#111111]">{formatCurrency(total)}</span>
+                  <span className="text-xs text-gray-400">{formatDate(doc.issue_date)}</span>
+                </div>
+              </div>
+            )
+          })}
+          {recentDocs.length === 0 && (
+            <div className="p-8 text-center text-gray-400 text-sm">
+              Žádné dokumenty.{' '}
+              <Link href="/documents/new" className="text-[#F04E12] hover:underline">
+                Vytvořte první.
+              </Link>
+            </div>
+          )}
+        </div>
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">

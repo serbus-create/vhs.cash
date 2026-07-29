@@ -301,7 +301,7 @@ export default function RemindersPage() {
   const totalCount = docs.length
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <div className="p-4 md:p-8 max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#111111]">Upomínky</h1>
         {!loading && (
@@ -342,6 +342,47 @@ export default function RemindersPage() {
               </div>
 
               <div className={`bg-white rounded-xl border shadow-sm overflow-hidden ${cfg.sectionBg}`}>
+                {/* Mobile card list */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {group.map((doc) => {
+                    const days = daysOverdue(doc.due_date)
+                    const amount = doc.amount_czk ?? doc.total_with_vat
+                    const lastSent = sentIds[doc.id] ?? doc.last_reminder
+                    const noEmail = !doc.clients?.email
+                    const remaining = doc.paid_amount ? amount - doc.paid_amount : amount
+                    return (
+                      <div key={doc.id} className="p-4">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <span className="font-semibold text-[#F04E12] text-sm">{doc.number}</span>
+                          <span className="inline-flex items-center gap-1 font-semibold text-xs" style={{ color: cfg.color }}>
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.color }} />
+                            {days} dní
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-[#111111]">{doc.clients?.name ?? '—'}</p>
+                        {noEmail && <p className="text-xs text-amber-600 mt-0.5">Chybí e-mail klienta</p>}
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-sm font-bold text-[#111111]">{formatCurrency(remaining)}</span>
+                          <span className="text-xs text-gray-400">Spl. {formatDate(doc.due_date)}</span>
+                        </div>
+                        {lastSent && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            Upomínka: {new Date(lastSent.sentAt).toLocaleDateString('cs-CZ')}
+                          </p>
+                        )}
+                        <button
+                          onClick={() => openModal(doc)}
+                          disabled={noEmail}
+                          className="w-full mt-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40"
+                        >
+                          Poslat upomínku
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
@@ -416,6 +457,7 @@ export default function RemindersPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           )
