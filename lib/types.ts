@@ -65,6 +65,7 @@ export interface Document {
   amount_czk?: number | null
   paid_amount?: number | null
   discount_percent: number
+  discount_note: string | null
   created_at: string
   clients?: Client | null
 }
@@ -77,6 +78,7 @@ export interface DocumentItem {
   unit_price: number
   vat_rate: number
   discount_percent: number
+  discount_note: string | null
 }
 
 export interface DocumentWithItems extends Document {

@@ -98,7 +98,7 @@ export function generateInvoiceHtml(params: {
           <td style="text-align:right;width:52px;padding:7px 8px;border-bottom:1px solid #f0f0f0;">${item.quantity}</td>
           <td style="text-align:right;width:80px;padding:7px 8px;border-bottom:1px solid #f0f0f0;">${fmtNum(item.unit_price)}</td>
           ${showVat ? `<td style="text-align:right;width:44px;padding:7px 8px;border-bottom:1px solid #f0f0f0;">${item.vat_rate} %</td>` : ''}
-          ${hasItemDiscount ? `<td style="text-align:right;width:48px;padding:7px 8px;border-bottom:1px solid #f0f0f0;${itemDiscount > 0 ? 'color:#F04E12;' : 'color:#aaa;'}">${itemDiscount > 0 ? `${itemDiscount} %` : '—'}</td>` : ''}
+          ${hasItemDiscount ? `<td style="text-align:right;width:48px;padding:7px 8px;border-bottom:1px solid #f0f0f0;${itemDiscount > 0 ? 'color:#F04E12;' : 'color:#aaa;'}">${itemDiscount > 0 ? (item.discount_note ? `${itemDiscount} % (${esc(item.discount_note)})` : `${itemDiscount} %`) : '—'}</td>` : ''}
           <td style="text-align:right;width:88px;font-weight:700;padding:7px 8px;border-bottom:1px solid #f0f0f0;">${fmtNum(lineTotal)}</td>
         </tr>`
     })
@@ -224,7 +224,7 @@ ${!supplierIsVatPayer ? '<div style="padding:6px 40px 0;"><span style="font-size
   </div>` : ''}
   ${hasDocDiscount ? `
   <div style="display:flex;justify-content:space-between;padding:4px 8px;">
-    <span style="font-size:8pt;color:#F04E12;">Sleva (${doc.discount_percent} %)</span>
+    <span style="font-size:8pt;color:#F04E12;">${doc.discount_note ? `Sleva ${doc.discount_percent} % — ${esc(doc.discount_note)}` : `Sleva (${doc.discount_percent} %)`}</span>
     <span style="font-size:8pt;color:#F04E12;font-weight:700;">−${fmt(subtotalBeforeDocDiscount - totalWithoutVat)}</span>
   </div>` : ''}
   ${showVat ? `

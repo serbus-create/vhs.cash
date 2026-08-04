@@ -497,7 +497,11 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
                 )}
                 {hasItemDiscount && (
                   <Text style={[styles.tableCell, styles.colDiscount, itemDiscount > 0 ? { color: ORANGE } : {}]}>
-                    {itemDiscount > 0 ? `${itemDiscount} %` : '—'}
+                    {itemDiscount > 0
+                      ? item.discount_note
+                        ? `${itemDiscount} % (${item.discount_note})`
+                        : `${itemDiscount} %`
+                      : '—'}
                   </Text>
                 )}
                 <Text style={[styles.tableCell, styles.colTotal, { fontFamily: 'DejaVu-Bold' }]}>
@@ -526,7 +530,9 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
           {hasDocDiscount && (
             <View style={styles.totalRow}>
               <Text style={[styles.totalLabel, { color: ORANGE }]}>
-                Sleva ({doc.discount_percent} %)
+                {doc.discount_note
+                  ? `Sleva ${doc.discount_percent} % — ${doc.discount_note}`
+                  : `Sleva (${doc.discount_percent} %)`}
               </Text>
               <Text style={[styles.totalValue, { color: ORANGE }]}>
                 −{fmt(subtotalBeforeDocDiscount - totalWithoutVat)}

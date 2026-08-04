@@ -14,6 +14,7 @@ interface LineItem {
   unitPrice: number
   vatRate: number
   discountPercent: number
+  discountNote: string
 }
 
 const newItem = (): LineItem => ({
@@ -23,6 +24,7 @@ const newItem = (): LineItem => ({
   unitPrice: 0,
   vatRate: 21,
   discountPercent: 0,
+  discountNote: '',
 })
 
 const STATUS_OPTIONS: { value: DocumentStatus; label: string }[] = [
@@ -56,6 +58,7 @@ export default function EditDocumentPage() {
   const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([])
   const [currency, setCurrency] = useState('CZK')
   const [docDiscountPercent, setDocDiscountPercent] = useState(0)
+  const [docDiscountNote, setDocDiscountNote] = useState('')
   const [hasExchangeRate, setHasExchangeRate] = useState(false)
   const [paidAmount, setPaidAmount] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
@@ -99,6 +102,7 @@ export default function EditDocumentPage() {
       setVariableSymbol(doc.variable_symbol ?? '')
       setCurrency(doc.currency ?? 'CZK')
       setDocDiscountPercent(doc.discount_percent ?? 0)
+      setDocDiscountNote(doc.discount_note ?? '')
       setHasExchangeRate(doc.exchange_rate != null)
       setPaidAmount(doc.paid_amount ?? null)
 
@@ -112,6 +116,7 @@ export default function EditDocumentPage() {
               unitPrice: i.unit_price,
               vatRate: i.vat_rate,
               discountPercent: i.discount_percent ?? 0,
+              discountNote: i.discount_note ?? '',
             }))
           : [newItem()]
       )
@@ -176,6 +181,7 @@ export default function EditDocumentPage() {
         total_without_vat: Math.round(totalWithoutVat * 100) / 100,
         total_with_vat: Math.round(totalWithVat * 100) / 100,
         discount_percent: docDiscountPercent,
+        discount_note: docDiscountNote || null,
         paid_amount: paidAmount,
         ...exchangeFields,
       })
@@ -194,6 +200,7 @@ export default function EditDocumentPage() {
         unit_price: i.unitPrice,
         vat_rate: i.vatRate,
         discount_percent: i.discountPercent,
+        discount_note: i.discountNote || null,
       }))
     )
 
@@ -472,54 +479,67 @@ export default function EditDocumentPage() {
             {items.map((item, idx) => {
               const lineTotal = item.quantity * item.unitPrice * (1 - item.discountPercent / 100) * (1 + item.vatRate / 100)
               return (
-                <div key={item.id} className="grid grid-cols-[2fr_72px_110px_60px_64px_100px_36px] gap-2 px-6 py-3 items-center">
-                  <input
-                    value={item.description}
-                    onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                    placeholder={`Položka ${idx + 1}`}
-                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
-                  />
-                  <input
-                    type="number" min="0" step="0.001"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
-                  />
-                  <input
-                    type="number" min="0" step="0.01"
-                    value={item.unitPrice}
-                    onChange={(e) => updateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
-                  />
-                  <select
-                    value={item.vatRate}
-                    onChange={(e) => updateItem(item.id, 'vatRate', parseFloat(e.target.value))}
-                    className="px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
-                  >
-                    <option value={0}>0 %</option>
-                    <option value={12}>12 %</option>
-                    <option value={21}>21 %</option>
-                  </select>
-                  <input
-                    type="number" min="0" max="100" step="0.01"
-                    value={item.discountPercent}
-                    onChange={(e) => updateItem(item.id, 'discountPercent', parseFloat(e.target.value) || 0)}
-                    disabled={isReadOnly}
-                    className={`px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12] ${isReadOnly ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
-                    placeholder="0"
-                  />
-                  <span className="text-right text-sm font-medium text-[#111111]">
-                    {formatCurrency(lineTotal, currency)}
-                  </span>
-                  <button
-                    onClick={() => removeItem(item.id)}
-                    disabled={items.length === 1}
-                    className="flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors disabled:opacity-20"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                <div key={item.id}>
+                  <div className="grid grid-cols-[2fr_72px_110px_60px_64px_100px_36px] gap-2 px-6 py-3 items-center">
+                    <input
+                      value={item.description}
+                      onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                      placeholder={`Položka ${idx + 1}`}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                    />
+                    <input
+                      type="number" min="0" step="0.001"
+                      value={item.quantity}
+                      onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                    />
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={item.unitPrice}
+                      onChange={(e) => updateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                    />
+                    <select
+                      value={item.vatRate}
+                      onChange={(e) => updateItem(item.id, 'vatRate', parseFloat(e.target.value))}
+                      className="px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                    >
+                      <option value={0}>0 %</option>
+                      <option value={12}>12 %</option>
+                      <option value={21}>21 %</option>
+                    </select>
+                    <input
+                      type="number" min="0" max="100" step="0.01"
+                      value={item.discountPercent}
+                      onChange={(e) => updateItem(item.id, 'discountPercent', parseFloat(e.target.value) || 0)}
+                      disabled={isReadOnly}
+                      className={`px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12] ${isReadOnly ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                      placeholder="0"
+                    />
+                    <span className="text-right text-sm font-medium text-[#111111]">
+                      {formatCurrency(lineTotal, currency)}
+                    </span>
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      disabled={items.length === 1}
+                      className="flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors disabled:opacity-20"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  {item.discountPercent > 0 && (
+                    <div className="px-6 pb-3 -mt-1">
+                      <input
+                        value={item.discountNote}
+                        onChange={(e) => updateItem(item.id, 'discountNote', e.target.value)}
+                        disabled={isReadOnly}
+                        placeholder="Popis slevy (např. Věrnostní sleva)"
+                        className={`w-2/3 px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#F04E12] ${isReadOnly ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                      />
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -542,19 +562,30 @@ export default function EditDocumentPage() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <div className="flex flex-col sm:flex-row gap-6 justify-between items-start">
             {/* Doc-level discount input */}
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-medium text-gray-600 whitespace-nowrap">Celková sleva na dokument</label>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number" min="0" max="100" step="0.01"
-                  value={docDiscountPercent}
-                  onChange={(e) => setDocDiscountPercent(parseFloat(e.target.value) || 0)}
-                  disabled={isReadOnly}
-                  className={`w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12] ${isReadOnly ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
-                  placeholder="0"
-                />
-                <span className="text-xs text-gray-500">%</span>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-medium text-gray-600 whitespace-nowrap">Celková sleva na dokument</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number" min="0" max="100" step="0.01"
+                    value={docDiscountPercent}
+                    onChange={(e) => setDocDiscountPercent(parseFloat(e.target.value) || 0)}
+                    disabled={isReadOnly}
+                    className={`w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12] ${isReadOnly ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                    placeholder="0"
+                  />
+                  <span className="text-xs text-gray-500">%</span>
+                </div>
               </div>
+              {docDiscountPercent > 0 && (
+                <input
+                  value={docDiscountNote}
+                  onChange={(e) => setDocDiscountNote(e.target.value)}
+                  disabled={isReadOnly}
+                  placeholder="Popis slevy (např. Věrnostní sleva)"
+                  className={`px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#F04E12] ${isReadOnly ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                />
+              )}
             </div>
             {/* Totals breakdown */}
             <div className="w-full sm:max-w-xs space-y-2 text-sm">
