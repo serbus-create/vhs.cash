@@ -17,13 +17,11 @@ export async function generateInvoicePdf(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<any, any, any>,
   documentId: string,
-  userId: string,
 ): Promise<Buffer> {
   const { data: doc, error: docErr } = await supabase
     .from('documents')
     .select('*, document_items(*)')
     .eq('id', documentId)
-    .eq('user_id', userId)
     .single()
 
   if (docErr || !doc) throw new Error(`Document not found: ${documentId}`)

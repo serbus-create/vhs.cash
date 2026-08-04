@@ -223,12 +223,23 @@ export default function AccountingPage() {
     try {
       const { default: JSZip } = await import('jszip')
       const zip = new JSZip()
+      const failed: string[] = []
       await Promise.all(
         filtered.map(async (doc) => {
-          const res = await fetch(`/api/pdf?id=${doc.id}`)
-          if (!res.ok) return
-          const buf = await res.arrayBuffer()
-          zip.file(`${doc.number.replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`, buf)
+          try {
+            const res = await fetch(`/api/pdf?id=${doc.id}`)
+            if (!res.ok) {
+              const detail = await res.text().catch(() => res.status.toString())
+              console.error(`[zip] PDF failed for ${doc.number}: ${res.status} ${detail}`)
+              failed.push(doc.number)
+              return
+            }
+            const buf = await res.arrayBuffer()
+            zip.file(`${doc.number.replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`, buf)
+          } catch (e) {
+            console.error(`[zip] PDF error for ${doc.number}:`, e)
+            failed.push(doc.number)
+          }
         }),
       )
       const blob = await zip.generateAsync({ type: 'blob' })
@@ -240,6 +251,9 @@ export default function AccountingPage() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      if (failed.length > 0) {
+        setDownloadError(`${failed.length} PDF se nepodařilo vygenerovat: ${failed.join(', ')}`)
+      }
     } catch (err) {
       setDownloadError(String(err))
     } finally {
@@ -397,9 +411,21 @@ export default function AccountingPage() {
                       <div key={doc.id} className="p-4">
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <span className="font-semibold text-[#F04E12] text-sm">{doc.number}</span>
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ds] ?? 'bg-gray-100 text-gray-600'}`}>
-                            {STATUS_LABELS[ds] ?? ds}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={`/api/pdf?id=${doc.id}`}
+                              download
+                              className="p-1 text-gray-300 hover:text-[#F04E12] transition-colors rounded"
+                              title="Stáhnout PDF"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </a>
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ds] ?? 'bg-gray-100 text-gray-600'}`}>
+                              {STATUS_LABELS[ds] ?? ds}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-sm text-[#111111]">{doc.clients?.name ?? '—'}</p>
                         <p className="text-xs text-gray-500">{doc.company_profiles?.name ?? '—'}</p>
@@ -432,6 +458,7 @@ export default function AccountingPage() {
                       <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Splatnost</th>
                       <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Status</th>
                       <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Celkem (CZK)</th>
+                      <th className="px-6 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -467,12 +494,24 @@ export default function AccountingPage() {
                                 </div>
                               )}
                             </td>
+                            <td className="px-4 py-3 text-right">
+                              <a
+                                href={`/api/pdf?id=${doc.id}`}
+                                download
+                                className="inline-flex items-center p-1.5 text-gray-300 hover:text-[#F04E12] transition-colors rounded"
+                                title="Stáhnout PDF"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                              </a>
+                            </td>
                           </tr>
                         )
                       })
                     ) : (
                       <tr>
-                        <td colSpan={7} className="px-6 py-16 text-center text-gray-400 text-sm">
+                        <td colSpan={8} className="px-6 py-16 text-center text-gray-400 text-sm">
                           Žádné faktury pro {monthLabel(navDate.year, navDate.month).toLowerCase()}.
                         </td>
                       </tr>

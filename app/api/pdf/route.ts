@@ -38,8 +38,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    console.log('[pdf] generating for document', id);
-    const buffer = await generateInvoicePdf(supabase, id, user.id);
+    console.log('[pdf] generating for document', id, 'user', user.id);
+    const buffer = await generateInvoicePdf(supabase, id);
     console.log('[pdf] rendered successfully, size:', buffer.length);
 
     // Fetch doc number for filename

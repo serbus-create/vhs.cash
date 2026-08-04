@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     // Generate PDF attachment
     let pdfAttachment: { filename: string; content: Buffer } | null = null
     try {
-      const pdfBuffer = await generateInvoicePdf(supabase, documentId, user.id)
+      const pdfBuffer = await generateInvoicePdf(supabase, documentId)
       const safeNumber = (doc.number as string).replace(/[^a-zA-Z0-9-]/g, '_')
       pdfAttachment = { filename: `faktura-${safeNumber}.pdf`, content: pdfBuffer }
     } catch (pdfErr) {
