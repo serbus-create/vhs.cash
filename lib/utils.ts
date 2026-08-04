@@ -50,3 +50,40 @@ export const TYPE_PREFIX: Record<string, string> = {
   nabidka: 'CN',
   objednavka: 'OB',
 }
+
+export interface LineItemForCalc {
+  quantity: number
+  unitPrice: number
+  vatRate: number
+  discountPercent: number
+}
+
+export function calcDocumentTotals(
+  items: LineItemForCalc[],
+  docDiscountPercent: number,
+): {
+  subtotalBeforeDocDiscount: number
+  totalWithoutVat: number
+  vatAmount: number
+  totalWithVat: number
+} {
+  const docFactor = 1 - docDiscountPercent / 100
+  let subtotalBeforeDocDiscount = 0
+  let totalWithoutVat = 0
+  let vatAmount = 0
+
+  for (const item of items) {
+    const baseAfterItemDiscount = item.quantity * item.unitPrice * (1 - item.discountPercent / 100)
+    subtotalBeforeDocDiscount += baseAfterItemDiscount
+    const baseAfterAllDiscounts = baseAfterItemDiscount * docFactor
+    totalWithoutVat += baseAfterAllDiscounts
+    vatAmount += baseAfterAllDiscounts * (item.vatRate / 100)
+  }
+
+  return {
+    subtotalBeforeDocDiscount,
+    totalWithoutVat,
+    vatAmount,
+    totalWithVat: totalWithoutVat + vatAmount,
+  }
+}

@@ -170,6 +170,7 @@ const styles = StyleSheet.create({
   colQty: { width: 48, textAlign: 'right' },
   colPrice: { width: 72, textAlign: 'right' },
   colVat: { width: 44, textAlign: 'right' },
+  colDiscount: { width: 48, textAlign: 'right' },
   colTotal: { width: 80, textAlign: 'right' },
   // ── Totals
   totalsSection: {
@@ -314,6 +315,14 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
   const totalWithoutVat = doc.total_without_vat ?? 0
   const totalWithVat = doc.total_with_vat ?? 0
   const vatAmount = totalWithVat - totalWithoutVat
+
+  const hasItemDiscount = doc.document_items.some((i) => (i.discount_percent ?? 0) > 0)
+  const hasDocDiscount = (doc.discount_percent ?? 0) > 0
+  const hasAnyDiscount = hasItemDiscount || hasDocDiscount
+  const subtotalBeforeDocDiscount = doc.document_items.reduce(
+    (s, i) => s + i.quantity * i.unit_price * (1 - (i.discount_percent ?? 0) / 100),
+    0,
+  )
 
   const supplierIsVatPayer = companyProfile?.vat_payer !== false
   // Reverse charge (§ 89 ZDPH) — zahraniční EU B2B klient s DIČ, daň odvede zákazník
@@ -465,11 +474,13 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
             <Text style={[styles.tableHeaderCell, styles.colQty]}>{t.colPocet}</Text>
             <Text style={[styles.tableHeaderCell, styles.colPrice]}>{t.colCenaks}</Text>
             {showVat && <Text style={[styles.tableHeaderCell, styles.colVat]}>{t.colDph}</Text>}
+            {hasItemDiscount && <Text style={[styles.tableHeaderCell, styles.colDiscount]}>Sleva</Text>}
             <Text style={[styles.tableHeaderCell, styles.colTotal]}>{t.colCelkem}</Text>
           </View>
 
           {doc.document_items.map((item, idx) => {
-            const lineBase = item.quantity * item.unit_price
+            const itemDiscount = item.discount_percent ?? 0
+            const lineBase = item.quantity * item.unit_price * (1 - itemDiscount / 100)
             const lineTotal = showVat ? lineBase * (1 + item.vat_rate / 100) : lineBase
             return (
               <View key={item.id} style={[styles.tableRow, idx % 2 === 1 ? styles.tableRowAlt : {}]}>
@@ -483,6 +494,11 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
                 </Text>
                 {showVat && (
                   <Text style={[styles.tableCell, styles.colVat]}>{item.vat_rate} %</Text>
+                )}
+                {hasItemDiscount && (
+                  <Text style={[styles.tableCell, styles.colDiscount, itemDiscount > 0 ? { color: ORANGE } : {}]}>
+                    {itemDiscount > 0 ? `${itemDiscount} %` : '—'}
+                  </Text>
                 )}
                 <Text style={[styles.tableCell, styles.colTotal, { fontFamily: 'DejaVu-Bold' }]}>
                   {fmtNum(lineTotal)}
@@ -501,6 +517,22 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
 
         {/* ── Totals ── */}
         <View style={styles.totalsSection}>
+          {hasAnyDiscount && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Mezisoučet</Text>
+              <Text style={styles.totalValue}>{fmt(subtotalBeforeDocDiscount)}</Text>
+            </View>
+          )}
+          {hasDocDiscount && (
+            <View style={styles.totalRow}>
+              <Text style={[styles.totalLabel, { color: ORANGE }]}>
+                Sleva ({doc.discount_percent} %)
+              </Text>
+              <Text style={[styles.totalValue, { color: ORANGE }]}>
+                −{fmt(subtotalBeforeDocDiscount - totalWithoutVat)}
+              </Text>
+            </View>
+          )}
           {showVat && (
             <>
               <View style={styles.totalRow}>

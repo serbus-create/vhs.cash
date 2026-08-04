@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Client, CompanyProfile, DocumentItem, DocumentStatus, DocumentType } from '@/lib/types'
-import { formatCurrency, TYPE_LABELS, STATUS_LABELS } from '@/lib/utils'
+import { formatCurrency, TYPE_LABELS, STATUS_LABELS, calcDocumentTotals } from '@/lib/utils'
+import { useUserRole } from '@/lib/useUserRole'
 
 interface LineItem {
   id: string
@@ -12,6 +13,7 @@ interface LineItem {
   quantity: number
   unitPrice: number
   vatRate: number
+  discountPercent: number
 }
 
 const newItem = (): LineItem => ({
@@ -20,6 +22,7 @@ const newItem = (): LineItem => ({
   quantity: 1,
   unitPrice: 0,
   vatRate: 21,
+  discountPercent: 0,
 })
 
 const STATUS_OPTIONS: { value: DocumentStatus; label: string }[] = [
@@ -52,6 +55,7 @@ export default function EditDocumentPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([])
   const [currency, setCurrency] = useState('CZK')
+  const [docDiscountPercent, setDocDiscountPercent] = useState(0)
   const [hasExchangeRate, setHasExchangeRate] = useState(false)
   const [paidAmount, setPaidAmount] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
@@ -63,6 +67,9 @@ export default function EditDocumentPage() {
   // Derive profile type for DUZP field visibility
   const selectedProfile = companyProfiles.find((p) => p.id === companyProfileId)
   const isSro = selectedProfile?.profile_type === 'sro'
+
+  const { role } = useUserRole()
+  const isReadOnly = role === 'accountant'
 
   useEffect(() => {
     Promise.all([
@@ -91,6 +98,7 @@ export default function EditDocumentPage() {
       setTaxDate(doc.tax_date ?? '')
       setVariableSymbol(doc.variable_symbol ?? '')
       setCurrency(doc.currency ?? 'CZK')
+      setDocDiscountPercent(doc.discount_percent ?? 0)
       setHasExchangeRate(doc.exchange_rate != null)
       setPaidAmount(doc.paid_amount ?? null)
 
@@ -103,6 +111,7 @@ export default function EditDocumentPage() {
               quantity: i.quantity,
               unitPrice: i.unit_price,
               vatRate: i.vat_rate,
+              discountPercent: i.discount_percent ?? 0,
             }))
           : [newItem()]
       )
@@ -110,10 +119,10 @@ export default function EditDocumentPage() {
     })
   }, [docId])
 
-  // Computed totals
-  const totalWithoutVat = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
-  const vatAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0)
-  const totalWithVat = totalWithoutVat + vatAmount
+  // Computed totals (with discounts)
+  const { subtotalBeforeDocDiscount, totalWithoutVat, vatAmount, totalWithVat } =
+    calcDocumentTotals(items, docDiscountPercent)
+  const hasAnyDiscount = items.some((i) => i.discountPercent > 0) || docDiscountPercent > 0
 
   const updateItem = (id: string, key: keyof LineItem, value: string | number) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [key]: value } : it)))
@@ -166,6 +175,7 @@ export default function EditDocumentPage() {
         currency,
         total_without_vat: Math.round(totalWithoutVat * 100) / 100,
         total_with_vat: Math.round(totalWithVat * 100) / 100,
+        discount_percent: docDiscountPercent,
         paid_amount: paidAmount,
         ...exchangeFields,
       })
@@ -183,6 +193,7 @@ export default function EditDocumentPage() {
         quantity: i.quantity,
         unit_price: i.unitPrice,
         vat_rate: i.vatRate,
+        discount_percent: i.discountPercent,
       }))
     )
 
@@ -447,20 +458,21 @@ export default function EditDocumentPage() {
             <h2 className="text-sm font-semibold text-[#111111] uppercase tracking-wide">Položky</h2>
           </div>
 
-          <div className="grid grid-cols-[2fr_80px_120px_80px_110px_36px] gap-2 px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="grid grid-cols-[2fr_72px_110px_60px_64px_100px_36px] gap-2 px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide">
             <span>Popis</span>
             <span>Počet</span>
             <span>Cena/ks (bez DPH)</span>
             <span>DPH %</span>
+            <span>Sleva %</span>
             <span className="text-right">Celkem s DPH</span>
             <span />
           </div>
 
           <div className="divide-y divide-gray-50">
             {items.map((item, idx) => {
-              const lineTotal = item.quantity * item.unitPrice * (1 + item.vatRate / 100)
+              const lineTotal = item.quantity * item.unitPrice * (1 - item.discountPercent / 100) * (1 + item.vatRate / 100)
               return (
-                <div key={item.id} className="grid grid-cols-[2fr_80px_120px_80px_110px_36px] gap-2 px-6 py-3 items-center">
+                <div key={item.id} className="grid grid-cols-[2fr_72px_110px_60px_64px_100px_36px] gap-2 px-6 py-3 items-center">
                   <input
                     value={item.description}
                     onChange={(e) => updateItem(item.id, 'description', e.target.value)}
@@ -488,6 +500,14 @@ export default function EditDocumentPage() {
                     <option value={12}>12 %</option>
                     <option value={21}>21 %</option>
                   </select>
+                  <input
+                    type="number" min="0" max="100" step="0.01"
+                    value={item.discountPercent}
+                    onChange={(e) => updateItem(item.id, 'discountPercent', parseFloat(e.target.value) || 0)}
+                    disabled={isReadOnly}
+                    className={`px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12] ${isReadOnly ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                    placeholder="0"
+                  />
                   <span className="text-right text-sm font-medium text-[#111111]">
                     {formatCurrency(lineTotal, currency)}
                   </span>
@@ -520,18 +540,48 @@ export default function EditDocumentPage() {
 
         {/* Totals */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <div className="max-w-xs ml-auto space-y-2 text-sm">
-            <div className="flex justify-between text-gray-500">
-              <span>Základ DPH</span>
-              <span>{formatCurrency(totalWithoutVat, currency)}</span>
+          <div className="flex flex-col sm:flex-row gap-6 justify-between items-start">
+            {/* Doc-level discount input */}
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-medium text-gray-600 whitespace-nowrap">Celková sleva na dokument</label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number" min="0" max="100" step="0.01"
+                  value={docDiscountPercent}
+                  onChange={(e) => setDocDiscountPercent(parseFloat(e.target.value) || 0)}
+                  disabled={isReadOnly}
+                  className={`w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12] ${isReadOnly ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                  placeholder="0"
+                />
+                <span className="text-xs text-gray-500">%</span>
+              </div>
             </div>
-            <div className="flex justify-between text-gray-500">
-              <span>DPH</span>
-              <span>{formatCurrency(vatAmount, currency)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-base text-[#111111] border-t border-gray-100 pt-2 mt-2">
-              <span>Celkem s DPH</span>
-              <span className="text-[#F04E12]">{formatCurrency(totalWithVat, currency)}</span>
+            {/* Totals breakdown */}
+            <div className="w-full sm:max-w-xs space-y-2 text-sm">
+              {hasAnyDiscount && (
+                <div className="flex justify-between text-gray-500">
+                  <span>Mezisoučet</span>
+                  <span>{formatCurrency(subtotalBeforeDocDiscount, currency)}</span>
+                </div>
+              )}
+              {docDiscountPercent > 0 && (
+                <div className="flex justify-between text-[#F04E12]">
+                  <span>Sleva ({docDiscountPercent} %)</span>
+                  <span>−{formatCurrency(subtotalBeforeDocDiscount - totalWithoutVat, currency)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-500">
+                <span>Základ DPH</span>
+                <span>{formatCurrency(totalWithoutVat, currency)}</span>
+              </div>
+              <div className="flex justify-between text-gray-500">
+                <span>DPH</span>
+                <span>{formatCurrency(vatAmount, currency)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-base text-[#111111] border-t border-gray-100 pt-2 mt-2">
+                <span>Celkem s DPH</span>
+                <span className="text-[#F04E12]">{formatCurrency(totalWithVat, currency)}</span>
+              </div>
             </div>
           </div>
         </div>

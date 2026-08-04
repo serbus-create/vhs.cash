@@ -55,6 +55,14 @@ export function generateInvoiceHtml(params: {
   const vatAmount = totalWithVat - totalWithoutVat
   const finalTotal = showVat ? totalWithVat : totalWithoutVat
 
+  const hasItemDiscount = doc.document_items.some((i) => (i.discount_percent ?? 0) > 0)
+  const hasDocDiscount = (doc.discount_percent ?? 0) > 0
+  const hasAnyDiscount = hasItemDiscount || hasDocDiscount
+  const subtotalBeforeDocDiscount = doc.document_items.reduce(
+    (s, i) => s + i.quantity * i.unit_price * (1 - (i.discount_percent ?? 0) / 100),
+    0,
+  )
+
   const clientCountry = client?.country ?? null
   const clientCountryName = clientCountry && clientCountry !== 'CZ'
     ? (COUNTRY_NAMES[clientCountry] ?? clientCountry)
@@ -79,7 +87,8 @@ export function generateInvoiceHtml(params: {
 
   const itemRows = doc.document_items
     .map((item, idx) => {
-      const lineBase = item.quantity * item.unit_price
+      const itemDiscount = item.discount_percent ?? 0
+      const lineBase = item.quantity * item.unit_price * (1 - itemDiscount / 100)
       const lineTotal = showVat ? lineBase * (1 + item.vat_rate / 100) : lineBase
       const bg = idx % 2 === 1 ? '#fafafa' : '#ffffff'
       return `
@@ -89,6 +98,7 @@ export function generateInvoiceHtml(params: {
           <td style="text-align:right;width:52px;padding:7px 8px;border-bottom:1px solid #f0f0f0;">${item.quantity}</td>
           <td style="text-align:right;width:80px;padding:7px 8px;border-bottom:1px solid #f0f0f0;">${fmtNum(item.unit_price)}</td>
           ${showVat ? `<td style="text-align:right;width:44px;padding:7px 8px;border-bottom:1px solid #f0f0f0;">${item.vat_rate} %</td>` : ''}
+          ${hasItemDiscount ? `<td style="text-align:right;width:48px;padding:7px 8px;border-bottom:1px solid #f0f0f0;${itemDiscount > 0 ? 'color:#F04E12;' : 'color:#aaa;'}">${itemDiscount > 0 ? `${itemDiscount} %` : '—'}</td>` : ''}
           <td style="text-align:right;width:88px;font-weight:700;padding:7px 8px;border-bottom:1px solid #f0f0f0;">${fmtNum(lineTotal)}</td>
         </tr>`
     })
@@ -192,6 +202,7 @@ export function generateInvoiceHtml(params: {
         <th style="background:#111;color:#fff;font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:7px 8px;text-align:right;width:52px;">Počet</th>
         <th style="background:#111;color:#fff;font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:7px 8px;text-align:right;width:80px;">Cena/ks</th>
         ${showVat ? '<th style="background:#111;color:#fff;font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:7px 8px;text-align:right;width:44px;">DPH</th>' : ''}
+        ${hasItemDiscount ? '<th style="background:#111;color:#fff;font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:7px 8px;text-align:right;width:48px;">Sleva</th>' : ''}
         <th style="background:#111;color:#fff;font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:7px 8px;text-align:right;width:88px;">Celkem</th>
       </tr>
     </thead>
@@ -206,6 +217,16 @@ ${!supplierIsVatPayer ? '<div style="padding:6px 40px 0;"><span style="font-size
 
 <!-- ── TOTALS ────────────────────────────────────────────── -->
 <div style="padding:0 32px;margin-top:0;">
+  ${hasAnyDiscount ? `
+  <div style="display:flex;justify-content:space-between;padding:4px 8px;">
+    <span style="font-size:8pt;color:#666;">Mezisoučet</span>
+    <span style="font-size:8pt;color:#333;font-weight:700;">${fmt(subtotalBeforeDocDiscount)}</span>
+  </div>` : ''}
+  ${hasDocDiscount ? `
+  <div style="display:flex;justify-content:space-between;padding:4px 8px;">
+    <span style="font-size:8pt;color:#F04E12;">Sleva (${doc.discount_percent} %)</span>
+    <span style="font-size:8pt;color:#F04E12;font-weight:700;">−${fmt(subtotalBeforeDocDiscount - totalWithoutVat)}</span>
+  </div>` : ''}
   ${showVat ? `
   <div style="display:flex;justify-content:space-between;padding:4px 8px;">
     <span style="font-size:8pt;color:#666;">Základ DPH</span>

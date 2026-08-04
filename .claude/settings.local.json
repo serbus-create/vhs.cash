@@ -28,7 +28,8 @@
       "Bash(VHS_EMAIL=\"info@v-h-s.cz\" VHS_PASS=\"Lenovo2017\" node verify-numbering.mjs)",
       "Bash(awk 'NR>1 {print $2}')",
       "Bash(xargs kill -9)",
-      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")"
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(grep *)"
     ]
   }
 }
