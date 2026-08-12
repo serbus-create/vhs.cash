@@ -22,6 +22,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Nepřihlášen' }, { status: 401 })
   }
 
+  const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (roleProfile?.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { searchParams } = new URL(req.url)
   const number = searchParams.get('number')
 
@@ -48,6 +53,11 @@ export async function POST() {
 
   if (!authData?.user) {
     return NextResponse.json({ error: 'Nepřihlášen' }, { status: 401 })
+  }
+
+  const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single()
+  if (roleProfile?.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { data: docs, error: selectErr } = await supabase
