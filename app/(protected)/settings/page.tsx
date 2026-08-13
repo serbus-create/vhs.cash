@@ -32,7 +32,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
-  const { role } = useUserRole()
+  const { role, workspaceId } = useUserRole()
   const isAdmin = role === 'admin'
 
   const loadProfiles = useCallback(async () => {
@@ -90,13 +90,14 @@ export default function SettingsPage() {
         .eq('id', editing.id)
       if (err) { setError(err.message); setSaving(false); return }
     } else {
+      if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); setSaving(false); return }
       const { data: { user } } = await supabase.auth.getUser()
       const isFirst = profiles.length === 0
       const { error: err } = await supabase.from('company_profiles').insert({
         ...form,
         vat_payer: vatPayer,
         user_id: user!.id,
-        workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6',
+        workspace_id: workspaceId,
         is_default: isFirst,
       })
       if (err) { setError(err.message); setSaving(false); return }

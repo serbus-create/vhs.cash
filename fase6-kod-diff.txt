@@ -1,0 +1,526 @@
+diff --git a/app/(protected)/clients/page.tsx b/app/(protected)/clients/page.tsx
+index 4a8d1be..9b3cb7e 100644
+--- a/app/(protected)/clients/page.tsx
++++ b/app/(protected)/clients/page.tsx
+@@ -37,7 +37,7 @@ export default function ClientsPage() {
+   const [isVatPayer, setIsVatPayer] = useState<boolean | null>(null)
+   const [error, setError] = useState('')
+   const supabase = createClient()
+-  const { role } = useUserRole()
++  const { role, workspaceId } = useUserRole()
+   const isAdmin = role === 'admin'
+ 
+   const loadClients = useCallback(async () => {
+@@ -111,8 +111,9 @@ export default function ClientsPage() {
+       const { error: err } = await supabase.from('clients').update({ ...form, country }).eq('id', editing.id)
+       if (err) { setError(err.message); setSaving(false); return }
+     } else {
++      if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); setSaving(false); return }
+       const { data: { user } } = await supabase.auth.getUser()
+-      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id, workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6' })
++      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id, workspace_id: workspaceId })
+       if (err) { setError(err.message); setSaving(false); return }
+     }
+ 
+diff --git a/app/(protected)/documents/new/page.tsx b/app/(protected)/documents/new/page.tsx
+index 3a1f1fb..2194681 100644
+--- a/app/(protected)/documents/new/page.tsx
++++ b/app/(protected)/documents/new/page.tsx
+@@ -3,6 +3,7 @@
+ import { useState, useEffect, useCallback, useRef } from 'react'
+ import { useRouter } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/client'
++import { useUserRole } from '@/lib/useUserRole'
+ import type { Client, CompanyProfile } from '@/lib/types'
+ import { formatCurrency, TYPE_PREFIX, calcDocumentTotals } from '@/lib/utils'
+ 
+@@ -31,6 +32,7 @@ const numericPart = (s: string) => s.replace(/\D/g, '')
+ export default function NewDocumentPage() {
+   const router = useRouter()
+   const supabase = createClient()
++  const { workspaceId } = useUserRole()
+ 
+   const [docType, setDocType] = useState<'faktura' | 'nabidka' | 'objednavka'>('faktura')
+   const [number, setNumber] = useState('')
+@@ -148,6 +150,8 @@ export default function NewDocumentPage() {
+     if (!number.trim()) { setError('Číslo dokumentu je povinné'); return }
+     if (items.some((i) => !i.description.trim())) { setError('Každá položka musí mít popis'); return }
+ 
++    if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); return }
++
+     setSaving(true)
+     setError('')
+ 
+@@ -157,7 +161,7 @@ export default function NewDocumentPage() {
+       .from('documents')
+       .insert({
+         user_id: user!.id,
+-        workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6',
++        workspace_id: workspaceId,
+         client_id: clientId || null,
+         company_profile_id: companyProfileId || null,
+         type: docType,
+diff --git a/app/(protected)/settings/page.tsx b/app/(protected)/settings/page.tsx
+index 69602f9..540bcec 100644
+--- a/app/(protected)/settings/page.tsx
++++ b/app/(protected)/settings/page.tsx
+@@ -32,7 +32,7 @@ export default function SettingsPage() {
+   const [saving, setSaving] = useState(false)
+   const [error, setError] = useState('')
+   const supabase = createClient()
+-  const { role } = useUserRole()
++  const { role, workspaceId } = useUserRole()
+   const isAdmin = role === 'admin'
+ 
+   const loadProfiles = useCallback(async () => {
+@@ -90,13 +90,14 @@ export default function SettingsPage() {
+         .eq('id', editing.id)
+       if (err) { setError(err.message); setSaving(false); return }
+     } else {
++      if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); setSaving(false); return }
+       const { data: { user } } = await supabase.auth.getUser()
+       const isFirst = profiles.length === 0
+       const { error: err } = await supabase.from('company_profiles').insert({
+         ...form,
+         vat_payer: vatPayer,
+         user_id: user!.id,
+-        workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6',
++        workspace_id: workspaceId,
+         is_default: isFirst,
+       })
+       if (err) { setError(err.message); setSaving(false); return }
+diff --git a/app/api/admin/backfill-exchange-rates/route.ts b/app/api/admin/backfill-exchange-rates/route.ts
+index 35a26b6..733c09b 100644
+--- a/app/api/admin/backfill-exchange-rates/route.ts
++++ b/app/api/admin/backfill-exchange-rates/route.ts
+@@ -22,8 +22,8 @@ export async function GET(req: Request) {
+     return NextResponse.json({ error: 'Nepřihlášen' }, { status: 401 })
+   }
+ 
+-  const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+-  if (roleProfile?.role !== 'admin') {
++  const { data: superAdminProfile } = await supabase.from('profiles').select('is_super_admin').eq('id', user.id).single()
++  if (!superAdminProfile?.is_super_admin) {
+     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+   }
+ 
+@@ -55,8 +55,8 @@ export async function POST() {
+     return NextResponse.json({ error: 'Nepřihlášen' }, { status: 401 })
+   }
+ 
+-  const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single()
+-  if (roleProfile?.role !== 'admin') {
++  const { data: superAdminProfile } = await supabase.from('profiles').select('is_super_admin').eq('id', authData.user.id).single()
++  if (!superAdminProfile?.is_super_admin) {
+     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+   }
+ 
+diff --git a/app/api/podklady/delete/route.ts b/app/api/podklady/delete/route.ts
+index 9075c43..057fd7e 100644
+--- a/app/api/podklady/delete/route.ts
++++ b/app/api/podklady/delete/route.ts
+@@ -1,8 +1,15 @@
+ import { NextRequest, NextResponse } from 'next/server'
++import { createClient } from '@/lib/supabase/server'
++import { getWorkspaceContext } from '@/lib/workspace'
+ import { deleteFile } from '@/lib/google-drive'
+ 
+ export async function DELETE(req: NextRequest) {
+   try {
++    const supabase = await createClient()
++    const ctx = await getWorkspaceContext(supabase)
++    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
++    if (ctx.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
++
+     const fileId = req.nextUrl.searchParams.get('fileId')
+     if (!fileId) return NextResponse.json({ error: 'No fileId' }, { status: 400 })
+     await deleteFile(fileId)
+diff --git a/app/api/podklady/download-zip/route.ts b/app/api/podklady/download-zip/route.ts
+index 046a2dd..8c992ca 100644
+--- a/app/api/podklady/download-zip/route.ts
++++ b/app/api/podklady/download-zip/route.ts
+@@ -1,11 +1,18 @@
+ import { NextRequest, NextResponse } from 'next/server'
+ import JSZip from 'jszip'
++import { createClient } from '@/lib/supabase/server'
++import { getWorkspaceContext } from '@/lib/workspace'
+ import { findMonthFolder, listFiles, downloadFileBuffer } from '@/lib/google-drive'
+ 
+ export async function GET(req: NextRequest) {
+   try {
++    const supabase = await createClient()
++    const ctx = await getWorkspaceContext(supabase)
++    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
++    if (!ctx.driveFolderId) return NextResponse.json({ error: 'Drive složka není nakonfigurována pro tento workspace' }, { status: 503 })
++
+     const yearMonth = req.nextUrl.searchParams.get('yearMonth') ?? new Date().toISOString().slice(0, 7)
+-    const folderId = await findMonthFolder(yearMonth)
++    const folderId = await findMonthFolder(yearMonth, ctx.driveFolderId)
+     if (!folderId) return NextResponse.json({ error: 'No files' }, { status: 404 })
+ 
+     const files = await listFiles(folderId)
+diff --git a/app/api/podklady/download/route.ts b/app/api/podklady/download/route.ts
+index d4fcb77..d0efdfc 100644
+--- a/app/api/podklady/download/route.ts
++++ b/app/api/podklady/download/route.ts
+@@ -1,8 +1,14 @@
+ import { NextRequest, NextResponse } from 'next/server'
++import { createClient } from '@/lib/supabase/server'
++import { getWorkspaceContext } from '@/lib/workspace'
+ import { downloadFileBuffer, getFileMetadata } from '@/lib/google-drive'
+ 
+ export async function GET(req: NextRequest) {
+   try {
++    const supabase = await createClient()
++    const ctx = await getWorkspaceContext(supabase)
++    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
++
+     const fileId = req.nextUrl.searchParams.get('fileId')
+     if (!fileId) return NextResponse.json({ error: 'No fileId' }, { status: 400 })
+ 
+diff --git a/app/api/podklady/list/route.ts b/app/api/podklady/list/route.ts
+index 0a842e8..2a9b7cb 100644
+--- a/app/api/podklady/list/route.ts
++++ b/app/api/podklady/list/route.ts
+@@ -1,10 +1,17 @@
+ import { NextRequest, NextResponse } from 'next/server'
++import { createClient } from '@/lib/supabase/server'
++import { getWorkspaceContext } from '@/lib/workspace'
+ import { findMonthFolder, listFiles } from '@/lib/google-drive'
+ 
+ export async function GET(req: NextRequest) {
+   try {
++    const supabase = await createClient()
++    const ctx = await getWorkspaceContext(supabase)
++    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
++    if (!ctx.driveFolderId) return NextResponse.json({ error: 'Drive složka není nakonfigurována pro tento workspace' }, { status: 503 })
++
+     const yearMonth = req.nextUrl.searchParams.get('yearMonth') ?? new Date().toISOString().slice(0, 7)
+-    const folderId = await findMonthFolder(yearMonth)
++    const folderId = await findMonthFolder(yearMonth, ctx.driveFolderId)
+     if (!folderId) return NextResponse.json([])
+     const files = await listFiles(folderId)
+     return NextResponse.json(files)
+diff --git a/app/api/podklady/upload/route.ts b/app/api/podklady/upload/route.ts
+index 36da419..4fac7cc 100644
+--- a/app/api/podklady/upload/route.ts
++++ b/app/api/podklady/upload/route.ts
+@@ -1,8 +1,16 @@
+ import { NextRequest, NextResponse } from 'next/server'
++import { createClient } from '@/lib/supabase/server'
++import { getWorkspaceContext } from '@/lib/workspace'
+ import { getOrCreateMonthFolder, uploadFile } from '@/lib/google-drive'
+ 
+ export async function POST(req: NextRequest) {
+   try {
++    const supabase = await createClient()
++    const ctx = await getWorkspaceContext(supabase)
++    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
++    if (ctx.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
++    if (!ctx.driveFolderId) return NextResponse.json({ error: 'Drive složka není nakonfigurována pro tento workspace' }, { status: 503 })
++
+     const formData = await req.formData()
+     const file = formData.get('file') as File | null
+     const yearMonth = (formData.get('yearMonth') as string | null) ?? new Date().toISOString().slice(0, 7)
+@@ -11,7 +19,7 @@ export async function POST(req: NextRequest) {
+       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+     }
+ 
+-    const folderId = await getOrCreateMonthFolder(yearMonth)
++    const folderId = await getOrCreateMonthFolder(yearMonth, ctx.driveFolderId)
+     const buffer = Buffer.from(await file.arrayBuffer())
+     const result = await uploadFile(buffer, file.name, file.type || 'application/octet-stream', folderId)
+ 
+diff --git a/app/api/reminders/route.ts b/app/api/reminders/route.ts
+index 7ae87cc..9534c23 100644
+--- a/app/api/reminders/route.ts
++++ b/app/api/reminders/route.ts
+@@ -1,7 +1,7 @@
+ import { NextRequest, NextResponse } from 'next/server'
+ import { Resend } from 'resend'
+-import { createServerClient } from '@supabase/ssr'
+-import { cookies } from 'next/headers'
++import { createClient } from '@/lib/supabase/server'
++import { getWorkspaceContext } from '@/lib/workspace'
+ import { getReminderHtml, getLang, type ReminderLevel } from '@/lib/reminder-email'
+ 
+ const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://vhs-cash.vercel.app'
+@@ -11,34 +11,15 @@ export const dynamic = 'force-dynamic'
+ 
+ const resend = new Resend(process.env.RESEND_API_KEY)
+ 
+-async function createSupabaseServer() {
+-  const cookieStore = await cookies()
+-  return createServerClient(
+-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+-    {
+-      cookies: {
+-        getAll: () => cookieStore.getAll(),
+-        setAll: (toSet: { name: string; value: string; options?: Record<string, unknown> }[]) => {
+-          try {
+-            toSet.forEach(({ name, value, options }) =>
+-              cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2])
+-            )
+-          } catch {}
+-        },
+-      },
+-    },
+-  )
+-}
+-
+ export async function POST(req: NextRequest) {
+   try {
+-    const supabase = await createSupabaseServer()
++    const supabase = await createClient()
+     const { data: { user } } = await supabase.auth.getUser()
+     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+ 
+-    const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+-    if (roleProfile?.role !== 'admin') {
++    const ctx = await getWorkspaceContext(supabase)
++    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
++    if (ctx.role !== 'admin') {
+       return NextResponse.json({ error: 'Forbidden — tato akce vyžaduje roli administrátora' }, { status: 403 })
+     }
+ 
+@@ -56,12 +37,11 @@ export async function POST(req: NextRequest) {
+       return NextResponse.json({ error: 'Chybí povinné parametry' }, { status: 400 })
+     }
+ 
+-    // Fetch document with client country for language detection
++    // RLS zajišťuje workspace-scoped přístup — user_id filtr není potřeba
+     const { data: doc } = await supabase
+       .from('documents')
+       .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, client_id, paid_amount, exchange_rate, clients(country)')
+       .eq('id', documentId)
+-      .eq('user_id', user.id)
+       .single()
+ 
+     if (!doc) return NextResponse.json({ error: 'Dokument nenalezen' }, { status: 404 })
+@@ -75,7 +55,6 @@ export async function POST(req: NextRequest) {
+       ? Math.floor((Date.now() - new Date(doc.due_date).getTime()) / 86_400_000)
+       : 0
+ 
+-    // Fetch company profile for payment details + QR code
+     let companyProfile: { name: string; bank_account: string | null; iban: string | null; swift: string | null } | null = null
+     if (doc.company_profile_id) {
+       const { data } = await supabase
+@@ -86,7 +65,6 @@ export async function POST(req: NextRequest) {
+       companyProfile = data ?? null
+     }
+ 
+-    // Compute remaining amount in invoice currency for QR code
+     const totalWithVat = (doc.total_with_vat as number) ?? 0
+     let remainingForQr = totalWithVat
+     if (paidAmount) {
+@@ -98,7 +76,6 @@ export async function POST(req: NextRequest) {
+       remainingForQr = Math.max(0, Math.round(remainingForQr * 100) / 100)
+     }
+ 
+-    // Build QR code URL — served as a real image so Gmail doesn't block it (data: URIs are blocked)
+     let qrCodeUrl: string | null = null
+     if (companyProfile?.iban) {
+       const qrParams = new URLSearchParams({
+@@ -142,7 +119,6 @@ export async function POST(req: NextRequest) {
+       return NextResponse.json({ error: 'Chyba při odesílání e-mailu' }, { status: 500 })
+     }
+ 
+-    // Record in reminders table
+     const { error: dbError } = await supabase.from('reminders').insert({
+       document_id: documentId,
+       level,
+@@ -151,7 +127,6 @@ export async function POST(req: NextRequest) {
+ 
+     if (dbError) {
+       console.error('DB insert error:', dbError)
+-      // Email was sent — don't fail the request, just log
+     }
+ 
+     return NextResponse.json({ ok: true })
+diff --git a/app/api/uctarna/route.ts b/app/api/uctarna/route.ts
+index 85902e8..400cc40 100644
+--- a/app/api/uctarna/route.ts
++++ b/app/api/uctarna/route.ts
+@@ -1,7 +1,7 @@
+ import { NextRequest, NextResponse } from 'next/server'
+ import { Resend } from 'resend'
+-import { createServerClient } from '@supabase/ssr'
+-import { cookies } from 'next/headers'
++import { createClient } from '@/lib/supabase/server'
++import { getWorkspaceContext } from '@/lib/workspace'
+ import { getInvoiceEmailHtml, getInvoiceEmailBodyText, getLang } from '@/lib/uctarna-email'
+ import { generateInvoicePdf } from '@/lib/pdf/generate'
+ 
+@@ -12,34 +12,15 @@ export const dynamic = 'force-dynamic'
+ 
+ const resend = new Resend(process.env.RESEND_API_KEY)
+ 
+-async function createSupabaseServer() {
+-  const cookieStore = await cookies()
+-  return createServerClient(
+-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+-    {
+-      cookies: {
+-        getAll: () => cookieStore.getAll(),
+-        setAll: (toSet: { name: string; value: string; options?: Record<string, unknown> }[]) => {
+-          try {
+-            toSet.forEach(({ name, value, options }) =>
+-              cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2])
+-            )
+-          } catch {}
+-        },
+-      },
+-    },
+-  )
+-}
+-
+ export async function POST(req: NextRequest) {
+   try {
+-    const supabase = await createSupabaseServer()
++    const supabase = await createClient()
+     const { data: { user } } = await supabase.auth.getUser()
+     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+ 
+-    const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+-    if (roleProfile?.role !== 'admin') {
++    const ctx = await getWorkspaceContext(supabase)
++    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
++    if (ctx.role !== 'admin') {
+       return NextResponse.json({ error: 'Forbidden — tato akce vyžaduje roli administrátora' }, { status: 403 })
+     }
+ 
+@@ -56,12 +37,11 @@ export async function POST(req: NextRequest) {
+       return NextResponse.json({ error: 'Chybí povinné parametry' }, { status: 400 })
+     }
+ 
+-    // Fetch document
++    // RLS zajišťuje workspace-scoped přístup — user_id filtr není potřeba
+     const { data: doc } = await supabase
+       .from('documents')
+       .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, client_id, clients(country)')
+       .eq('id', documentId)
+-      .eq('user_id', user.id)
+       .single()
+ 
+     if (!doc) return NextResponse.json({ error: 'Dokument nenalezen' }, { status: 404 })
+@@ -71,7 +51,6 @@ export async function POST(req: NextRequest) {
+ 
+     const amount = (doc.amount_czk ?? doc.total_with_vat) as number
+ 
+-    // Fetch company profile for payment details + QR
+     let companyProfile: { name: string; bank_account: string | null; iban: string | null; swift: string | null } | null = null
+     if (doc.company_profile_id) {
+       const { data } = await supabase
+@@ -82,7 +61,6 @@ export async function POST(req: NextRequest) {
+       companyProfile = data ?? null
+     }
+ 
+-    // Build QR code URL
+     let qrCodeUrl: string | null = null
+     if (companyProfile?.iban) {
+       const qrParams = new URLSearchParams({
+@@ -111,7 +89,6 @@ export async function POST(req: NextRequest) {
+ 
+     const htmlContent = getInvoiceEmailHtml(vars, lang)
+ 
+-    // Generate PDF attachment
+     let pdfAttachment: { filename: string; content: Buffer } | null = null
+     try {
+       const pdfBuffer = await generateInvoicePdf(supabase, documentId)
+@@ -136,12 +113,11 @@ export async function POST(req: NextRequest) {
+       return NextResponse.json({ error: 'Chyba při odesílání e-mailu' }, { status: 500 })
+     }
+ 
+-    // Update document status to 'sent'
++    // RLS zaručuje, že update projde jen pro dokument v rámci workspace admina
+     const { error: updateError } = await supabase
+       .from('documents')
+       .update({ status: 'sent' })
+       .eq('id', documentId)
+-      .eq('user_id', user.id)
+ 
+     if (updateError) {
+       console.error('[uctarna] Status update error:', updateError)
+diff --git a/lib/google-drive.ts b/lib/google-drive.ts
+index f8d235b..75c8928 100644
+--- a/lib/google-drive.ts
++++ b/lib/google-drive.ts
+@@ -12,15 +12,9 @@ function getDriveClient() {
+   return google.drive({ version: 'v3', auth })
+ }
+ 
+-function rootFolderId(): string {
+-  const id = process.env.GOOGLE_DRIVE_FOLDER_ID
+-  if (!id) throw new Error('GOOGLE_DRIVE_FOLDER_ID not configured')
+-  return id
+-}
+-
+-export async function findMonthFolder(yearMonth: string): Promise<string | null> {
++export async function findMonthFolder(yearMonth: string, rootFolderId: string): Promise<string | null> {
+   const drive = getDriveClient()
+-  const parent = rootFolderId()
++  const parent = rootFolderId
+   const res = await drive.files.list({
+     q: `name='${yearMonth}' and mimeType='application/vnd.google-apps.folder' and '${parent}' in parents and trashed=false`,
+     fields: 'files(id)',
+@@ -30,15 +24,15 @@ export async function findMonthFolder(yearMonth: string): Promise<string | null>
+   return res.data.files?.[0]?.id ?? null
+ }
+ 
+-export async function getOrCreateMonthFolder(yearMonth: string): Promise<string> {
+-  const existing = await findMonthFolder(yearMonth)
++export async function getOrCreateMonthFolder(yearMonth: string, rootFolderId: string): Promise<string> {
++  const existing = await findMonthFolder(yearMonth, rootFolderId)
+   if (existing) return existing
+   const drive = getDriveClient()
+   const res = await drive.files.create({
+     requestBody: {
+       name: yearMonth,
+       mimeType: 'application/vnd.google-apps.folder',
+-      parents: [rootFolderId()],
++      parents: [rootFolderId],
+     },
+     fields: 'id',
+     supportsAllDrives: true,
+diff --git a/lib/useUserRole.ts b/lib/useUserRole.ts
+index 786b20d..23ec0d0 100644
+--- a/lib/useUserRole.ts
++++ b/lib/useUserRole.ts
+@@ -5,25 +5,29 @@ import { createClient } from '@/lib/supabase/client'
+ 
+ export type UserRole = 'admin' | 'accountant'
+ 
+-export function useUserRole(): { role: UserRole; loading: boolean } {
++export function useUserRole(): { role: UserRole; loading: boolean; workspaceId: string | null } {
+   const [role, setRole] = useState<UserRole>('admin')
+   const [loading, setLoading] = useState(true)
++  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+ 
+   useEffect(() => {
+     const supabase = createClient()
+     supabase.auth.getUser().then(({ data: { user } }) => {
+       if (!user) { setLoading(false); return }
+       supabase
+-        .from('profiles')
+-        .select('role')
+-        .eq('id', user.id)
++        .from('workspace_members')
++        .select('workspace_id, role')
++        .eq('user_id', user.id)
+         .single()
+         .then(({ data }) => {
+-          if (data?.role === 'accountant') setRole('accountant')
++          if (data) {
++            setWorkspaceId(data.workspace_id as string)
++            if (data.role === 'accountant') setRole('accountant')
++          }
+           setLoading(false)
+         })
+     })
+   }, [])
+ 
+-  return { role, loading }
++  return { role, loading, workspaceId }
+ }

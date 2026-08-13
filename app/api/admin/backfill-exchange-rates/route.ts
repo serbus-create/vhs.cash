@@ -22,8 +22,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Nepřihlášen' }, { status: 401 })
   }
 
-  const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (roleProfile?.role !== 'admin') {
+  const { data: superAdminProfile } = await supabase.from('profiles').select('is_super_admin').eq('id', user.id).single()
+  if (!superAdminProfile?.is_super_admin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -55,8 +55,8 @@ export async function POST() {
     return NextResponse.json({ error: 'Nepřihlášen' }, { status: 401 })
   }
 
-  const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single()
-  if (roleProfile?.role !== 'admin') {
+  const { data: superAdminProfile } = await supabase.from('profiles').select('is_super_admin').eq('id', authData.user.id).single()
+  if (!superAdminProfile?.is_super_admin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

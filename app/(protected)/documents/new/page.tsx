@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useUserRole } from '@/lib/useUserRole'
 import type { Client, CompanyProfile } from '@/lib/types'
 import { formatCurrency, TYPE_PREFIX, calcDocumentTotals } from '@/lib/utils'
 
@@ -31,6 +32,7 @@ const numericPart = (s: string) => s.replace(/\D/g, '')
 export default function NewDocumentPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { workspaceId } = useUserRole()
 
   const [docType, setDocType] = useState<'faktura' | 'nabidka' | 'objednavka'>('faktura')
   const [number, setNumber] = useState('')
@@ -148,6 +150,8 @@ export default function NewDocumentPage() {
     if (!number.trim()) { setError('Číslo dokumentu je povinné'); return }
     if (items.some((i) => !i.description.trim())) { setError('Každá položka musí mít popis'); return }
 
+    if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); return }
+
     setSaving(true)
     setError('')
 
@@ -157,7 +161,7 @@ export default function NewDocumentPage() {
       .from('documents')
       .insert({
         user_id: user!.id,
-        workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6',
+        workspace_id: workspaceId,
         client_id: clientId || null,
         company_profile_id: companyProfileId || null,
         type: docType,

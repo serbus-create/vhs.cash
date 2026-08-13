@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { getWorkspaceContext } from '@/lib/workspace'
 import { downloadFileBuffer, getFileMetadata } from '@/lib/google-drive'
 
 export async function GET(req: NextRequest) {
   try {
+    const supabase = await createClient()
+    const ctx = await getWorkspaceContext(supabase)
+    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const fileId = req.nextUrl.searchParams.get('fileId')
     if (!fileId) return NextResponse.json({ error: 'No fileId' }, { status: 400 })
 

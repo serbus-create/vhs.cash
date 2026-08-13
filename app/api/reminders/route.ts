@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
+import { getWorkspaceContext } from '@/lib/workspace'
 import { getReminderHtml, getLang, type ReminderLevel } from '@/lib/reminder-email'
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://vhs-cash.vercel.app'
@@ -11,34 +11,15 @@ export const dynamic = 'force-dynamic'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-async function createSupabaseServer() {
-  const cookieStore = await cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet: { name: string; value: string; options?: Record<string, unknown> }[]) => {
-          try {
-            toSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2])
-            )
-          } catch {}
-        },
-      },
-    },
-  )
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createSupabaseServer()
+    const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (roleProfile?.role !== 'admin') {
+    const ctx = await getWorkspaceContext(supabase)
+    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (ctx.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden — tato akce vyžaduje roli administrátora' }, { status: 403 })
     }
 
@@ -56,12 +37,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Chybí povinné parametry' }, { status: 400 })
     }
 
-    // Fetch document with client country for language detection
+    // RLS zajišťuje workspace-scoped přístup — user_id filtr není potřeba
     const { data: doc } = await supabase
       .from('documents')
       .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, client_id, paid_amount, exchange_rate, clients(country)')
       .eq('id', documentId)
-      .eq('user_id', user.id)
       .single()
 
     if (!doc) return NextResponse.json({ error: 'Dokument nenalezen' }, { status: 404 })
@@ -75,7 +55,6 @@ export async function POST(req: NextRequest) {
       ? Math.floor((Date.now() - new Date(doc.due_date).getTime()) / 86_400_000)
       : 0
 
-    // Fetch company profile for payment details + QR code
     let companyProfile: { name: string; bank_account: string | null; iban: string | null; swift: string | null } | null = null
     if (doc.company_profile_id) {
       const { data } = await supabase
@@ -86,7 +65,6 @@ export async function POST(req: NextRequest) {
       companyProfile = data ?? null
     }
 
-    // Compute remaining amount in invoice currency for QR code
     const totalWithVat = (doc.total_with_vat as number) ?? 0
     let remainingForQr = totalWithVat
     if (paidAmount) {
@@ -98,7 +76,6 @@ export async function POST(req: NextRequest) {
       remainingForQr = Math.max(0, Math.round(remainingForQr * 100) / 100)
     }
 
-    // Build QR code URL — served as a real image so Gmail doesn't block it (data: URIs are blocked)
     let qrCodeUrl: string | null = null
     if (companyProfile?.iban) {
       const qrParams = new URLSearchParams({
@@ -142,7 +119,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Chyba při odesílání e-mailu' }, { status: 500 })
     }
 
-    // Record in reminders table
     const { error: dbError } = await supabase.from('reminders').insert({
       document_id: documentId,
       level,
@@ -151,7 +127,6 @@ export async function POST(req: NextRequest) {
 
     if (dbError) {
       console.error('DB insert error:', dbError)
-      // Email was sent — don't fail the request, just log
     }
 
     return NextResponse.json({ ok: true })

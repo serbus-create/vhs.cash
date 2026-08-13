@@ -12,15 +12,9 @@ function getDriveClient() {
   return google.drive({ version: 'v3', auth })
 }
 
-function rootFolderId(): string {
-  const id = process.env.GOOGLE_DRIVE_FOLDER_ID
-  if (!id) throw new Error('GOOGLE_DRIVE_FOLDER_ID not configured')
-  return id
-}
-
-export async function findMonthFolder(yearMonth: string): Promise<string | null> {
+export async function findMonthFolder(yearMonth: string, rootFolderId: string): Promise<string | null> {
   const drive = getDriveClient()
-  const parent = rootFolderId()
+  const parent = rootFolderId
   const res = await drive.files.list({
     q: `name='${yearMonth}' and mimeType='application/vnd.google-apps.folder' and '${parent}' in parents and trashed=false`,
     fields: 'files(id)',
@@ -30,15 +24,15 @@ export async function findMonthFolder(yearMonth: string): Promise<string | null>
   return res.data.files?.[0]?.id ?? null
 }
 
-export async function getOrCreateMonthFolder(yearMonth: string): Promise<string> {
-  const existing = await findMonthFolder(yearMonth)
+export async function getOrCreateMonthFolder(yearMonth: string, rootFolderId: string): Promise<string> {
+  const existing = await findMonthFolder(yearMonth, rootFolderId)
   if (existing) return existing
   const drive = getDriveClient()
   const res = await drive.files.create({
     requestBody: {
       name: yearMonth,
       mimeType: 'application/vnd.google-apps.folder',
-      parents: [rootFolderId()],
+      parents: [rootFolderId],
     },
     fields: 'id',
     supportsAllDrives: true,

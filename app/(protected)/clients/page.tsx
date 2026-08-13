@@ -37,7 +37,7 @@ export default function ClientsPage() {
   const [isVatPayer, setIsVatPayer] = useState<boolean | null>(null)
   const [error, setError] = useState('')
   const supabase = createClient()
-  const { role } = useUserRole()
+  const { role, workspaceId } = useUserRole()
   const isAdmin = role === 'admin'
 
   const loadClients = useCallback(async () => {
@@ -111,8 +111,9 @@ export default function ClientsPage() {
       const { error: err } = await supabase.from('clients').update({ ...form, country }).eq('id', editing.id)
       if (err) { setError(err.message); setSaving(false); return }
     } else {
+      if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); setSaving(false); return }
       const { data: { user } } = await supabase.auth.getUser()
-      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id, workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6' })
+      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id, workspace_id: workspaceId })
       if (err) { setError(err.message); setSaving(false); return }
     }
 

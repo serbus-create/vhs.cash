@@ -1,0 +1,99 @@
+diff --git a/app/(protected)/clients/page.tsx b/app/(protected)/clients/page.tsx
+index a12379e..4a8d1be 100644
+--- a/app/(protected)/clients/page.tsx
++++ b/app/(protected)/clients/page.tsx
+@@ -107,13 +107,12 @@ export default function ClientsPage() {
+     setSaving(true)
+     setError('')
+ 
+-    const { data: { user } } = await supabase.auth.getUser()
+-
+     if (editing) {
+       const { error: err } = await supabase.from('clients').update({ ...form, country }).eq('id', editing.id)
+       if (err) { setError(err.message); setSaving(false); return }
+     } else {
+-      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id })
++      const { data: { user } } = await supabase.auth.getUser()
++      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id, workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6' })
+       if (err) { setError(err.message); setSaving(false); return }
+     }
+ 
+diff --git a/app/(protected)/documents/new/page.tsx b/app/(protected)/documents/new/page.tsx
+index 8b11809..3a1f1fb 100644
+--- a/app/(protected)/documents/new/page.tsx
++++ b/app/(protected)/documents/new/page.tsx
+@@ -75,9 +75,9 @@ export default function NewDocumentPage() {
+       })
+   }, [])
+ 
+-  // Generate document number and auto-populate variable symbol on type/profile change
++  // Generate document number and auto-populate variable symbol on type/profile change.
++  // RLS scopes queries to current workspace — user_id filtr není potřeba.
+   const generateNumber = useCallback(async (type: string, profileId: string) => {
+-    const { data: { user } } = await supabase.auth.getUser()
+     const year = new Date().getFullYear()
+     const prefix = TYPE_PREFIX[type]
+ 
+@@ -90,7 +90,6 @@ export default function NewDocumentPage() {
+       const { data: existing } = await supabase
+         .from('documents')
+         .select('number')
+-        .eq('user_id', user!.id)
+         .eq('type', 'faktura')
+         .like('number', `FA-${year}-%`)
+ 
+@@ -104,7 +103,6 @@ export default function NewDocumentPage() {
+       const { count } = await supabase
+         .from('documents')
+         .select('*', { count: 'exact', head: true })
+-        .eq('user_id', user!.id)
+         .eq('type', type)
+         .gte('created_at', `${year}-01-01`)
+       seq = String((count ?? 0) + 1).padStart(4, '0')
+@@ -159,6 +157,7 @@ export default function NewDocumentPage() {
+       .from('documents')
+       .insert({
+         user_id: user!.id,
++        workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6',
+         client_id: clientId || null,
+         company_profile_id: companyProfileId || null,
+         type: docType,
+diff --git a/app/(protected)/settings/page.tsx b/app/(protected)/settings/page.tsx
+index 0f2dbd2..2f7ba93 100644
+--- a/app/(protected)/settings/page.tsx
++++ b/app/(protected)/settings/page.tsx
+@@ -83,8 +83,6 @@ export default function SettingsPage() {
+     if (!form.name.trim()) { setError('Název je povinný'); return }
+     setSaving(true)
+     setError('')
+-    const { data: { user } } = await supabase.auth.getUser()
+-
+     if (editing) {
+       const { error: err } = await supabase
+         .from('company_profiles')
+@@ -92,11 +90,13 @@ export default function SettingsPage() {
+         .eq('id', editing.id)
+       if (err) { setError(err.message); setSaving(false); return }
+     } else {
++      const { data: { user } } = await supabase.auth.getUser()
+       const isFirst = profiles.length === 0
+       const { error: err } = await supabase.from('company_profiles').insert({
+         ...form,
+         vat_payer: vatPayer,
+         user_id: user!.id,
++        workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6',
+         is_default: isFirst,
+       })
+       if (err) { setError(err.message); setSaving(false); return }
+@@ -108,9 +108,8 @@ export default function SettingsPage() {
+   }
+ 
+   const setDefault = async (id: string) => {
+-    const { data: { user } } = await supabase.auth.getUser()
+-    // Clear all defaults for this user, then set new one
+-    await supabase.from('company_profiles').update({ is_default: false }).eq('user_id', user!.id)
++    // RLS scopes updates k workspace, user_id filtr není potřeba
++    await supabase.from('company_profiles').update({ is_default: false }).neq('id', id)
+     await supabase.from('company_profiles').update({ is_default: true }).eq('id', id)
+     loadProfiles()
+   }

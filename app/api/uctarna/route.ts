@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
+import { getWorkspaceContext } from '@/lib/workspace'
 import { getInvoiceEmailHtml, getInvoiceEmailBodyText, getLang } from '@/lib/uctarna-email'
 import { generateInvoicePdf } from '@/lib/pdf/generate'
 
@@ -12,34 +12,15 @@ export const dynamic = 'force-dynamic'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-async function createSupabaseServer() {
-  const cookieStore = await cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet: { name: string; value: string; options?: Record<string, unknown> }[]) => {
-          try {
-            toSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2])
-            )
-          } catch {}
-        },
-      },
-    },
-  )
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createSupabaseServer()
+    const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: roleProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (roleProfile?.role !== 'admin') {
+    const ctx = await getWorkspaceContext(supabase)
+    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (ctx.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden — tato akce vyžaduje roli administrátora' }, { status: 403 })
     }
 
@@ -56,12 +37,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Chybí povinné parametry' }, { status: 400 })
     }
 
-    // Fetch document
+    // RLS zajišťuje workspace-scoped přístup — user_id filtr není potřeba
     const { data: doc } = await supabase
       .from('documents')
       .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, company_profile_id, client_id, clients(country)')
       .eq('id', documentId)
-      .eq('user_id', user.id)
       .single()
 
     if (!doc) return NextResponse.json({ error: 'Dokument nenalezen' }, { status: 404 })
@@ -71,7 +51,6 @@ export async function POST(req: NextRequest) {
 
     const amount = (doc.amount_czk ?? doc.total_with_vat) as number
 
-    // Fetch company profile for payment details + QR
     let companyProfile: { name: string; bank_account: string | null; iban: string | null; swift: string | null } | null = null
     if (doc.company_profile_id) {
       const { data } = await supabase
@@ -82,7 +61,6 @@ export async function POST(req: NextRequest) {
       companyProfile = data ?? null
     }
 
-    // Build QR code URL
     let qrCodeUrl: string | null = null
     if (companyProfile?.iban) {
       const qrParams = new URLSearchParams({
@@ -111,7 +89,6 @@ export async function POST(req: NextRequest) {
 
     const htmlContent = getInvoiceEmailHtml(vars, lang)
 
-    // Generate PDF attachment
     let pdfAttachment: { filename: string; content: Buffer } | null = null
     try {
       const pdfBuffer = await generateInvoicePdf(supabase, documentId)
@@ -136,12 +113,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Chyba při odesílání e-mailu' }, { status: 500 })
     }
 
-    // Update document status to 'sent'
+    // RLS zaručuje, že update projde jen pro dokument v rámci workspace admina
     const { error: updateError } = await supabase
       .from('documents')
       .update({ status: 'sent' })
       .eq('id', documentId)
-      .eq('user_id', user.id)
 
     if (updateError) {
       console.error('[uctarna] Status update error:', updateError)
