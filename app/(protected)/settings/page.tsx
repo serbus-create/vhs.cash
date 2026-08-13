@@ -83,8 +83,6 @@ export default function SettingsPage() {
     if (!form.name.trim()) { setError('Název je povinný'); return }
     setSaving(true)
     setError('')
-    const { data: { user } } = await supabase.auth.getUser()
-
     if (editing) {
       const { error: err } = await supabase
         .from('company_profiles')
@@ -92,11 +90,13 @@ export default function SettingsPage() {
         .eq('id', editing.id)
       if (err) { setError(err.message); setSaving(false); return }
     } else {
+      const { data: { user } } = await supabase.auth.getUser()
       const isFirst = profiles.length === 0
       const { error: err } = await supabase.from('company_profiles').insert({
         ...form,
         vat_payer: vatPayer,
         user_id: user!.id,
+        workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6',
         is_default: isFirst,
       })
       if (err) { setError(err.message); setSaving(false); return }
@@ -109,7 +109,6 @@ export default function SettingsPage() {
 
   const setDefault = async (id: string) => {
     const { data: { user } } = await supabase.auth.getUser()
-    // Clear all defaults for this user, then set new one
     await supabase.from('company_profiles').update({ is_default: false }).eq('user_id', user!.id)
     await supabase.from('company_profiles').update({ is_default: true }).eq('id', id)
     loadProfiles()

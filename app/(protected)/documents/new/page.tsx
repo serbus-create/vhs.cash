@@ -75,9 +75,9 @@ export default function NewDocumentPage() {
       })
   }, [])
 
-  // Generate document number and auto-populate variable symbol on type/profile change
+  // Generate document number and auto-populate variable symbol on type/profile change.
+  // RLS scopes queries to current workspace — user_id filtr není potřeba.
   const generateNumber = useCallback(async (type: string, profileId: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
     const year = new Date().getFullYear()
     const prefix = TYPE_PREFIX[type]
 
@@ -90,7 +90,6 @@ export default function NewDocumentPage() {
       const { data: existing } = await supabase
         .from('documents')
         .select('number')
-        .eq('user_id', user!.id)
         .eq('type', 'faktura')
         .like('number', `FA-${year}-%`)
 
@@ -104,7 +103,6 @@ export default function NewDocumentPage() {
       const { count } = await supabase
         .from('documents')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', user!.id)
         .eq('type', type)
         .gte('created_at', `${year}-01-01`)
       seq = String((count ?? 0) + 1).padStart(4, '0')
@@ -159,6 +157,7 @@ export default function NewDocumentPage() {
       .from('documents')
       .insert({
         user_id: user!.id,
+        workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6',
         client_id: clientId || null,
         company_profile_id: companyProfileId || null,
         type: docType,

@@ -107,13 +107,12 @@ export default function ClientsPage() {
     setSaving(true)
     setError('')
 
-    const { data: { user } } = await supabase.auth.getUser()
-
     if (editing) {
       const { error: err } = await supabase.from('clients').update({ ...form, country }).eq('id', editing.id)
       if (err) { setError(err.message); setSaving(false); return }
     } else {
-      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id })
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id, workspace_id: '999b13d2-9fd3-4ae6-8ad0-8a1af5dfbbd6' })
       if (err) { setError(err.message); setSaving(false); return }
     }
 
