@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://vhs-cash.vercel.app'
+
 export async function POST(req: Request) {
   const supabase = await createClient()
 
@@ -82,6 +84,7 @@ export async function POST(req: Request) {
 
   const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { workspace_id, workspace_role: role },
+    redirectTo: `${APP_BASE_URL}/auth/callback`,
   })
 
   if (inviteErr) return NextResponse.json({ error: inviteErr.message }, { status: 500 })
