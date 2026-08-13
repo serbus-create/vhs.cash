@@ -84,7 +84,7 @@ export async function POST(req: Request) {
 
   const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { workspace_id, workspace_role: role },
-    redirectTo: `${APP_BASE_URL}/auth/callback`,
+    redirectTo: `${APP_BASE_URL}/auth/confirm`,
   })
 
   if (inviteErr) return NextResponse.json({ error: inviteErr.message }, { status: 500 })
