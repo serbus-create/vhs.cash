@@ -104,3 +104,76 @@ export async function POST(req: Request) {
     { status: 201 }
   )
 }
+
+export async function DELETE(req: Request) {
+  const supabase = await createClient()
+
+  // 1. Ověř přihlášení
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Nepřihlášen' }, { status: 401 })
+
+  const body = await req.json()
+  const workspace_member_id = body.workspace_member_id as string | undefined
+
+  if (!workspace_member_id) {
+    return NextResponse.json({ error: 'Chybí workspace_member_id' }, { status: 400 })
+  }
+
+  const admin = createAdminClient()
+
+  // 2. Načti záznam — potřebujeme workspace_id pro autorizaci
+  const { data: member } = await admin
+    .from('workspace_members')
+    .select('id, workspace_id, joined_at')
+    .eq('id', workspace_member_id)
+    .single()
+
+  // 3. Autorizace — vždy před prozrazením stavu záznamu
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.is_super_admin) {
+    // Neautorizovaný volající dostane vždy stejný 403 — bez ohledu na to,
+    // jestli záznam neexistuje nebo k němu nemá přístup
+    if (!member) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const { data: membership } = await supabase
+      .from('workspace_members')
+      .select('role')
+      .eq('workspace_id', member.workspace_id)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!membership || membership.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
+  // 4. Stav záznamu — jen pro autorizované volající
+  if (!member) {
+    return NextResponse.json({ error: 'Záznam nenalezen' }, { status: 404 })
+  }
+
+  if (member.joined_at !== null) {
+    return NextResponse.json(
+      { error: 'Nelze smazat — uživatel pozvánku již přijal. Pro odebrání aktivního člena použijte jinou funkci.' },
+      { status: 409 }
+    )
+  }
+
+  // 5. Smazání
+  const { error: deleteErr } = await admin
+    .from('workspace_members')
+    .delete()
+    .eq('id', workspace_member_id)
+    .is('joined_at', null)
+
+  if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 })
+
+  return NextResponse.json({ ok: true })
+}

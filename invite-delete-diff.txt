@@ -1,0 +1,124 @@
+diff --git a/app/(protected)/admin/workspaces/page.tsx b/app/(protected)/admin/workspaces/page.tsx
+index 1d2f3e4..5be9bf5 100644
+--- a/app/(protected)/admin/workspaces/page.tsx
++++ b/app/(protected)/admin/workspaces/page.tsx
+@@ -92,6 +92,21 @@ export default function AdminWorkspacesPage() {
+     setInviteSuccess('')
+   }
+ 
++  const handleDeleteInvite = async (memberId: string, email: string | null) => {
++    if (!confirm(`Smazat čekající pozvánku pro ${email ?? memberId}?`)) return
++    const res = await fetch('/api/admin/invite-user', {
++      method: 'DELETE',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ workspace_member_id: memberId }),
++    })
++    if (!res.ok) {
++      const body = await res.json()
++      alert(body.error ?? 'Chyba při mazání pozvánky')
++    } else {
++      fetchWorkspaces()
++    }
++  }
++
+   const handleInvite = async () => {
+     if (!inviteEmail.trim() || !inviteWorkspaceId) { setInviteError('E-mail je povinný'); return }
+     setInviting(true)
+@@ -193,6 +208,7 @@ export default function AdminWorkspacesPage() {
+                     <th className="px-5 py-2.5 text-left font-medium">Role</th>
+                     <th className="px-5 py-2.5 text-left font-medium">Stav</th>
+                     <th className="px-5 py-2.5 text-left font-medium">Pozval</th>
++                    <th className="px-5 py-2.5 text-left font-medium"></th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-gray-50">
+@@ -212,6 +228,19 @@ export default function AdminWorkspacesPage() {
+                         )}
+                       </td>
+                       <td className="px-5 py-3 text-gray-400 text-xs">{m.invited_by_email ?? '—'}</td>
++                      <td className="px-5 py-3">
++                        {!m.joined_at && (
++                          <button
++                            onClick={() => handleDeleteInvite(m.id, m.email)}
++                            className="text-gray-300 hover:text-red-500 transition-colors"
++                            title="Smazat pozvánku"
++                          >
++                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
++                            </svg>
++                          </button>
++                        )}
++                      </td>
+                     </tr>
+                   ))}
+                 </tbody>
+diff --git a/app/api/admin/invite-user/route.ts b/app/api/admin/invite-user/route.ts
+index acc017c..9ea4ec8 100644
+--- a/app/api/admin/invite-user/route.ts
++++ b/app/api/admin/invite-user/route.ts
+@@ -104,3 +104,65 @@ export async function POST(req: Request) {
+     { status: 201 }
+   )
+ }
++
++export async function DELETE(req: Request) {
++  const supabase = await createClient()
++
++  const { data: { user } } = await supabase.auth.getUser()
++  if (!user) return NextResponse.json({ error: 'Nepřihlášen' }, { status: 401 })
++
++  const body = await req.json()
++  const workspace_member_id = body.workspace_member_id as string | undefined
++
++  if (!workspace_member_id) {
++    return NextResponse.json({ error: 'Chybí workspace_member_id' }, { status: 400 })
++  }
++
++  const admin = createAdminClient()
++
++  const { data: member, error: fetchErr } = await admin
++    .from('workspace_members')
++    .select('id, workspace_id, joined_at')
++    .eq('id', workspace_member_id)
++    .single()
++
++  if (fetchErr || !member) {
++    return NextResponse.json({ error: 'Záznam nenalezen' }, { status: 404 })
++  }
++
++  if (member.joined_at !== null) {
++    return NextResponse.json(
++      { error: 'Nelze smazat — uživatel pozvánku již přijal. Pro odebrání aktivního člena použijte jinou funkci.' },
++      { status: 409 }
++    )
++  }
++
++  const { data: profile } = await supabase
++    .from('profiles')
++    .select('is_super_admin')
++    .eq('id', user.id)
++    .single()
++
++  if (!profile?.is_super_admin) {
++    const { data: membership } = await supabase
++      .from('workspace_members')
++      .select('role')
++      .eq('workspace_id', member.workspace_id)
++      .eq('user_id', user.id)
++      .single()
++
++    if (!membership || membership.role !== 'admin') {
++      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
++    }
++  }
++
++  const { error: deleteErr } = await admin
++    .from('workspace_members')
++    .delete()
++    .eq('id', workspace_member_id)
++    .is('joined_at', null)
++
++  if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 })
++
++  return NextResponse.json({ ok: true })
++}
