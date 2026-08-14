@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import type { Document, DocumentStatus } from '@/lib/types'
-import { formatCurrency, formatDate, STATUS_LABELS, TYPE_LABELS, STATUS_COLORS, getDisplayStatus } from '@/lib/utils'
+import { formatCurrency, formatDate, monthLabel, STATUS_LABELS, TYPE_LABELS, STATUS_COLORS, getDisplayStatus } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
+import MonthNav from '@/components/month-nav'
+
+type EntityFilter = 'all' | 'osvc' | 'sro'
 
 const STATUS_OPTIONS = ['', 'draft', 'issued', 'sent', 'paid', 'overdue', 'cancelled']
 
@@ -14,10 +17,13 @@ const STATUS_OPTION_LIST: DocumentStatus[] = ['draft', 'issued', 'sent', 'paid',
 const TYPE_OPTIONS = ['', 'faktura', 'nabidka', 'objednavka']
 
 export default function DocumentsPage() {
+  const now = new Date()
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [typeFilter, setTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [navDate, setNavDate] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 })
+  const [entityFilter, setEntityFilter] = useState<EntityFilter>('all')
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [openStatusId, setOpenStatusId] = useState<string | null>(null)
@@ -28,6 +34,26 @@ export default function DocumentsPage() {
   const router = useRouter()
   const { role } = useUserRole()
   const isAdmin = role === 'admin'
+
+  const goPrev = () => setNavDate(({ year, month }) => {
+    const d = new Date(year, month - 2)
+    return { year: d.getFullYear(), month: d.getMonth() + 1 }
+  })
+  const goNext = () => setNavDate(({ year, month }) => {
+    const d = new Date(year, month)
+    return { year: d.getFullYear(), month: d.getMonth() + 1 }
+  })
+
+  const filtered = useMemo(() => {
+    return documents.filter((doc) => {
+      const dateStr = doc.issue_date ?? doc.created_at
+      const dt = new Date(dateStr)
+      if (dt.getFullYear() !== navDate.year || dt.getMonth() + 1 !== navDate.month) return false
+      if (entityFilter === 'all') return true
+      const want = entityFilter === 'osvc' ? 'osvč' : 'sro'
+      return (doc as any).company_profiles?.profile_type === want
+    })
+  }, [documents, navDate, entityFilter])
 
   const loadDocs = useCallback(async () => {
     setLoading(true)
@@ -123,7 +149,7 @@ export default function DocumentsPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#111111]">Dokumenty</h1>
-          <p className="text-gray-500 text-sm mt-1">{documents.length} dokumentů</p>
+          <p className="text-gray-500 text-sm mt-1">{filtered.length} dokumentů</p>
         </div>
         {isAdmin ? (
           <Link
@@ -149,8 +175,26 @@ export default function DocumentsPage() {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      {/* Controls */}
+      <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 mb-6">
+        <MonthNav navDate={navDate} onPrev={goPrev} onNext={goNext} />
+
+        <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5">
+          {(['osvc', 'sro', 'all'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setEntityFilter(v)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                entityFilter === v
+                  ? 'bg-[#F04E12] text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {v === 'all' ? 'Vše' : v === 'osvc' ? 'OSVČ' : 's.r.o.'}
+            </button>
+          ))}
+        </div>
+
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
@@ -195,20 +239,26 @@ export default function DocumentsPage() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {loading ? (
           <div className="py-20 text-center text-gray-400 text-sm">Načítám…</div>
-        ) : documents.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="py-20 text-center text-gray-400 text-sm">
-            Žádné dokumenty.{' '}
-            {isAdmin && (
-              <Link href="/documents/new" className="text-[#F04E12] hover:underline">
-                Vytvořte první.
-              </Link>
+            {documents.length === 0 ? (
+              <>
+                Žádné dokumenty.{' '}
+                {isAdmin && (
+                  <Link href="/documents/new" className="text-[#F04E12] hover:underline">
+                    Vytvořte první.
+                  </Link>
+                )}
+              </>
+            ) : (
+              `Žádné dokumenty pro ${monthLabel(navDate.year, navDate.month).toLowerCase()}.`
             )}
           </div>
         ) : (
           <>
             {/* Mobile card list */}
             <div className="md:hidden divide-y divide-gray-100">
-              {documents.map((doc) => {
+              {filtered.map((doc) => {
                 const ds = getDisplayStatus(doc.status, doc.due_date)
                 const total = doc.total_with_vat ?? 0
                 return (
@@ -285,7 +335,7 @@ export default function DocumentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {documents.map((doc) => (
+              {filtered.map((doc) => (
                 <tr
                   key={doc.id}
                   onClick={() => router.push(`/documents/${doc.id}`)}

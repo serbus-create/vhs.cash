@@ -1,3 +1,11 @@
+export function monthLabel(year: number, month: number): string {
+  const raw = new Date(year, month - 1, 1).toLocaleDateString('cs-CZ', {
+    month: 'long',
+    year: 'numeric',
+  })
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
 export const formatCurrency = (amount: number, currency = 'CZK') =>
   new Intl.NumberFormat('cs-CZ', { style: 'currency', currency }).format(amount)
 

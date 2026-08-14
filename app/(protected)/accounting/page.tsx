@@ -5,10 +5,12 @@ import { createClient } from '@/lib/supabase/client'
 import {
   formatCurrency,
   formatDate,
+  monthLabel,
   STATUS_COLORS,
   STATUS_LABELS,
   getDisplayStatus,
 } from '@/lib/utils'
+import MonthNav from '@/components/month-nav'
 
 // ---------- types ----------
 
@@ -44,14 +46,6 @@ const MONTH_SLUGS = [
   'cervenec', 'srpen', 'zari', 'rijen', 'listopad', 'prosinec',
 ]
 
-function monthLabel(year: number, month: number): string {
-  const raw = new Date(year, month - 1, 1).toLocaleDateString('cs-CZ', {
-    month: 'long',
-    year: 'numeric',
-  })
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
-}
-
 function toYearMonth(d: { year: number; month: number }): string {
   return `${d.year}-${String(d.month).padStart(2, '0')}`
 }
@@ -79,44 +73,6 @@ function fileIcon(mimeType: string) {
       <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
-    </div>
-  )
-}
-
-// ---------- MonthNav shared component ----------
-
-function MonthNav({
-  navDate,
-  onPrev,
-  onNext,
-}: {
-  navDate: { year: number; month: number }
-  onPrev: () => void
-  onNext: () => void
-}) {
-  return (
-    <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1 py-1">
-      <button
-        onClick={onPrev}
-        className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-[#111111] transition-colors"
-        aria-label="Předchozí měsíc"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
-      <span className="min-w-[160px] text-center text-sm font-semibold text-[#111111] select-none px-1">
-        {monthLabel(navDate.year, navDate.month)}
-      </span>
-      <button
-        onClick={onNext}
-        className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-[#111111] transition-colors"
-        aria-label="Následující měsíc"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
     </div>
   )
 }
