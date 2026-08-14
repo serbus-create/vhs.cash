@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useUserRole } from '@/lib/useUserRole'
 import {
   formatCurrency,
   formatDate,
@@ -70,6 +71,7 @@ function docCzk(d: FinanceDoc): number {
 
 export default function FinancePage() {
   const supabase = createClient()
+  const { workspaceId } = useUserRole()
 
   const [docs, setDocs] = useState<FinanceDoc[]>([])
   const [loading, setLoading] = useState(true)
@@ -78,18 +80,20 @@ export default function FinancePage() {
   const [selectedYears, setSelectedYears] = useState<Set<number>>(new Set())
 
   useEffect(() => {
+    if (!workspaceId) return
     supabase
       .from('documents')
       .select(
         'id, number, status, issue_date, due_date, currency, total_with_vat, amount_czk, company_profile_id, clients(name), company_profiles(name, profile_type)',
       )
+      .eq('workspace_id', workspaceId)
       .neq('status', 'draft')
       .order('issue_date', { ascending: false })
       .then(({ data }) => {
         setDocs((data ?? []) as unknown as FinanceDoc[])
         setLoading(false)
       })
-  }, [])
+  }, [workspaceId])
 
   // ------ entity filter ------
 

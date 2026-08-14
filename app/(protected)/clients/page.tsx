@@ -41,11 +41,12 @@ export default function ClientsPage() {
   const isAdmin = role === 'admin'
 
   const loadClients = useCallback(async () => {
+    if (!workspaceId) return
     setLoading(true)
-    const { data } = await supabase.from('clients').select('*').order('name')
+    const { data } = await supabase.from('clients').select('*').eq('workspace_id', workspaceId).order('name')
     setClients(data ?? [])
     setLoading(false)
-  }, [])
+  }, [workspaceId])
 
   useEffect(() => { loadClients() }, [loadClients])
 

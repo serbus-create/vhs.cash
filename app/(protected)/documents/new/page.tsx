@@ -63,10 +63,12 @@ export default function NewDocumentPage() {
 
   // Load clients and company profiles
   useEffect(() => {
-    supabase.from('clients').select('*').order('name').then(({ data }) => setClients(data ?? []))
+    if (!workspaceId) return
+    supabase.from('clients').select('*').eq('workspace_id', workspaceId).order('name').then(({ data }) => setClients(data ?? []))
     supabase
       .from('company_profiles')
       .select('*')
+      .eq('workspace_id', workspaceId)
       .order('is_default', { ascending: false })
       .order('name')
       .then(({ data }) => {
@@ -75,11 +77,12 @@ export default function NewDocumentPage() {
         const def = list.find((p) => p.is_default) ?? list[0]
         if (def) setCompanyProfileId(def.id)
       })
-  }, [])
+  }, [workspaceId])
 
   // Generate document number and auto-populate variable symbol on type/profile change.
   // RLS scopes queries to current workspace — user_id filtr není potřeba.
   const generateNumber = useCallback(async (type: string, profileId: string) => {
+    if (!workspaceId) return
     const year = new Date().getFullYear()
     const prefix = TYPE_PREFIX[type]
 
@@ -92,6 +95,7 @@ export default function NewDocumentPage() {
       const { data: existing } = await supabase
         .from('documents')
         .select('number')
+        .eq('workspace_id', workspaceId)
         .eq('type', 'faktura')
         .like('number', `FA-${year}-%`)
 
@@ -105,6 +109,7 @@ export default function NewDocumentPage() {
       const { count } = await supabase
         .from('documents')
         .select('*', { count: 'exact', head: true })
+        .eq('workspace_id', workspaceId)
         .eq('type', type)
         .gte('created_at', `${year}-01-01`)
       seq = String((count ?? 0) + 1).padStart(4, '0')
@@ -114,7 +119,7 @@ export default function NewDocumentPage() {
     setNumber(num)
     vsManuallyEdited.current = false
     setVariableSymbol(numericPart(num))
-  }, [companyProfiles])
+  }, [companyProfiles, workspaceId])
 
   useEffect(() => { generateNumber(docType, companyProfileId) }, [docType, companyProfileId, generateNumber])
 

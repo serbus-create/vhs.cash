@@ -71,7 +71,7 @@ function buildQrUrl(profile: CompanyProfileInfo, vars: { amount: number; currenc
 
 export default function UctarnaPage() {
   const supabase = createClient()
-  const { role } = useUserRole()
+  const { role, workspaceId } = useUserRole()
   const isAdmin = role === 'admin'
   const [docs, setDocs] = useState<IssuedInvoice[]>([])
   const [profiles, setProfiles] = useState<Record<string, CompanyProfileInfo>>({})
@@ -83,18 +83,21 @@ export default function UctarnaPage() {
   const [markingId, setMarkingId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!workspaceId) return
     async function load() {
       setLoading(true)
       const [docsRes, profilesRes] = await Promise.all([
         supabase
           .from('documents')
           .select('id, number, issue_date, due_date, total_with_vat, currency, amount_czk, variable_symbol, company_profile_id, client_id, clients(name, email, country)')
+          .eq('workspace_id', workspaceId)
           .eq('type', 'faktura')
           .eq('status', 'issued')
           .order('issue_date', { ascending: false }),
         supabase
           .from('company_profiles')
-          .select('id, name, bank_account, iban, swift'),
+          .select('id, name, bank_account, iban, swift')
+          .eq('workspace_id', workspaceId),
       ])
 
       const profileMap: Record<string, CompanyProfileInfo> = {}
@@ -121,7 +124,7 @@ export default function UctarnaPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [workspaceId])
 
   const grouped = useMemo(() => {
     const byMonth: Record<string, IssuedInvoice[]> = {}

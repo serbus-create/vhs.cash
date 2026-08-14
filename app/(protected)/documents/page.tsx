@@ -32,7 +32,7 @@ export default function DocumentsPage() {
   const [paymentInput, setPaymentInput] = useState('')
   const supabase = createClient()
   const router = useRouter()
-  const { role } = useUserRole()
+  const { role, workspaceId } = useUserRole()
   const isAdmin = role === 'admin'
 
   const goPrev = () => setNavDate(({ year, month }) => {
@@ -56,10 +56,12 @@ export default function DocumentsPage() {
   }, [documents, navDate, entityFilter])
 
   const loadDocs = useCallback(async () => {
+    if (!workspaceId) return
     setLoading(true)
     let query = supabase
       .from('documents')
       .select('*, clients(name), company_profiles(name, profile_type)')
+      .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
 
     if (typeFilter) query = query.eq('type', typeFilter)
@@ -68,7 +70,7 @@ export default function DocumentsPage() {
     const { data } = await query
     setDocuments(data ?? [])
     setLoading(false)
-  }, [typeFilter, statusFilter])
+  }, [typeFilter, statusFilter, workspaceId])
 
   useEffect(() => { loadDocs() }, [loadDocs])
 

@@ -71,7 +71,7 @@ function czk(d: DashboardDoc) {
 
 export default function DashboardPage() {
   const supabase = createClient()
-  const { role } = useUserRole()
+  const { role, workspaceId } = useUserRole()
   const isAdmin = role === 'admin'
   const now = new Date()
 
@@ -82,18 +82,20 @@ export default function DashboardPage() {
   const [selectedYears, setSelectedYears] = useState<Set<number>>(new Set())
 
   useEffect(() => {
+    if (!workspaceId) return
     supabase
       .from('documents')
       .select(
         'id, number, type, status, issue_date, due_date, currency, total_with_vat, amount_czk, paid_amount, clients(name), company_profiles(name, profile_type)',
       )
+      .eq('workspace_id', workspaceId)
       .neq('status', 'draft')
       .order('issue_date', { ascending: false })
       .then(({ data }) => {
         setDocs((data ?? []) as unknown as DashboardDoc[])
         setLoading(false)
       })
-  }, [])
+  }, [workspaceId])
 
   // entity filter
   const entityFiltered = useMemo(() => {

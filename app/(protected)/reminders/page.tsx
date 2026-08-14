@@ -126,7 +126,7 @@ async function fetchQrCode(params: {
 
 export default function RemindersPage() {
   const supabase = createClient()
-  const { role } = useUserRole()
+  const { role, workspaceId } = useUserRole()
   const isAdmin = role === 'admin'
   const [docs, setDocs] = useState<OverdueDoc[]>([])
   const [loading, setLoading] = useState(true)
@@ -136,6 +136,7 @@ export default function RemindersPage() {
   const [sentIds, setSentIds] = useState<Record<string, { sentAt: string; level: number }>>({})
 
   useEffect(() => {
+    if (!workspaceId) return
     async function load() {
       setLoading(true)
       const today = new Date().toISOString().split('T')[0]
@@ -143,6 +144,7 @@ export default function RemindersPage() {
       const { data: documents } = await supabase
         .from('documents')
         .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, paid_amount, company_profile_id, clients(name, email, country)')
+        .eq('workspace_id', workspaceId)
         .eq('type', 'faktura')
         .not('status', 'in', '("paid","cancelled","draft")')
         .lt('due_date', today)
@@ -187,7 +189,7 @@ export default function RemindersPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [workspaceId])
 
   const grouped = useMemo(() => {
     const byLevel: Record<ReminderLevel, OverdueDoc[]> = { 1: [], 2: [], 3: [] }

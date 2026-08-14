@@ -36,15 +36,17 @@ export default function SettingsPage() {
   const isAdmin = role === 'admin'
 
   const loadProfiles = useCallback(async () => {
+    if (!workspaceId) return
     setLoading(true)
     const { data } = await supabase
       .from('company_profiles')
       .select('*')
+      .eq('workspace_id', workspaceId)
       .order('is_default', { ascending: false })
       .order('name')
     setProfiles(data ?? [])
     setLoading(false)
-  }, [])
+  }, [workspaceId])
 
   useEffect(() => { loadProfiles() }, [loadProfiles])
 
@@ -109,8 +111,8 @@ export default function SettingsPage() {
   }
 
   const setDefault = async (id: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('company_profiles').update({ is_default: false }).eq('user_id', user!.id)
+    if (!workspaceId) return
+    await supabase.from('company_profiles').update({ is_default: false }).eq('workspace_id', workspaceId)
     await supabase.from('company_profiles').update({ is_default: true }).eq('id', id)
     loadProfiles()
   }

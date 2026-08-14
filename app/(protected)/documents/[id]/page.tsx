@@ -71,13 +71,14 @@ export default function EditDocumentPage() {
   const selectedProfile = companyProfiles.find((p) => p.id === companyProfileId)
   const isSro = selectedProfile?.profile_type === 'sro'
 
-  const { role } = useUserRole()
+  const { role, workspaceId } = useUserRole()
   const isReadOnly = role === 'accountant'
 
   useEffect(() => {
+    if (!workspaceId) return
     Promise.all([
-      supabase.from('clients').select('*').order('name'),
-      supabase.from('company_profiles').select('*').order('is_default', { ascending: false }).order('name'),
+      supabase.from('clients').select('*').eq('workspace_id', workspaceId).order('name'),
+      supabase.from('company_profiles').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }).order('name'),
       supabase.from('documents').select('*, document_items(*)').eq('id', docId).single(),
     ]).then(([clientsRes, profilesRes, docRes]) => {
       setClients(clientsRes.data ?? [])
@@ -122,7 +123,7 @@ export default function EditDocumentPage() {
       )
       setLoading(false)
     })
-  }, [docId])
+  }, [docId, workspaceId])
 
   // Computed totals (with discounts)
   const { subtotalBeforeDocDiscount, totalWithoutVat, vatAmount, totalWithVat } =

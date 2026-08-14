@@ -11,6 +11,7 @@ import {
   getDisplayStatus,
 } from '@/lib/utils'
 import MonthNav from '@/components/month-nav'
+import { useUserRole } from '@/lib/useUserRole'
 
 // ---------- types ----------
 
@@ -81,6 +82,7 @@ function fileIcon(mimeType: string) {
 
 export default function AccountingPage() {
   const supabase = createClient()
+  const { workspaceId } = useUserRole()
   const now = new Date()
 
   const [activeTab, setActiveTab] = useState<Tab>('faktury')
@@ -103,11 +105,13 @@ export default function AccountingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    if (!workspaceId) return
     supabase
       .from('documents')
       .select(
         'id, number, status, issue_date, due_date, currency, total_with_vat, amount_czk, paid_amount, clients(name), company_profiles(name, profile_type)',
       )
+      .eq('workspace_id', workspaceId)
       .eq('type', 'faktura')
       .neq('status', 'draft')
       .order('issue_date', { ascending: false })
@@ -115,7 +119,7 @@ export default function AccountingPage() {
         setDocs((data ?? []) as unknown as AccountingDoc[])
         setLoading(false)
       })
-  }, [])
+  }, [workspaceId])
 
   // — Faktury navigation —
   const goPrev = () =>
