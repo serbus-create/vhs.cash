@@ -1,0 +1,212 @@
+diff --git a/app/auth/confirm/page.tsx b/app/auth/confirm/page.tsx
+index 9aa9063..fb257ac 100644
+--- a/app/auth/confirm/page.tsx
++++ b/app/auth/confirm/page.tsx
+@@ -4,8 +4,16 @@ import { useEffect, useState } from 'react'
+ import { useRouter } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/client'
+ 
++type PageState = 'loading' | 'error' | 'set-password'
++
+ export default function AuthConfirmPage() {
++  const [pageState, setPageState] = useState<PageState>('loading')
++  const [flowType, setFlowType] = useState<string | null>(null)
+   const [errorMsg, setErrorMsg] = useState('')
++  const [password, setPassword] = useState('')
++  const [confirmPassword, setConfirmPassword] = useState('')
++  const [formError, setFormError] = useState('')
++  const [saving, setSaving] = useState(false)
+   const router = useRouter()
+ 
+   useEffect(() => {
+@@ -15,6 +23,7 @@ export default function AuthConfirmPage() {
+     const errorDesc = params.get('error_description')
+     if (errorDesc) {
+       setErrorMsg(decodeURIComponent(errorDesc.replace(/\+/g, ' ')))
++      setPageState('error')
+       return
+     }
+ 
+@@ -24,12 +33,13 @@ export default function AuthConfirmPage() {
+ 
+     if (!access_token || !refresh_token) {
+       setErrorMsg('Pozvánkový odkaz je neplatný nebo neobsahuje přístupové tokeny. Požádejte o novou pozvánku.')
++      setPageState('error')
+       return
+     }
+ 
+     const supabase = createClient()
+ 
+-    supabase.auth.setSession({ access_token, refresh_token }).then(async ({ error }) => {
++    supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
+       if (error) {
+         const isExpired =
+           error.message.toLowerCase().includes('expired') ||
+@@ -39,22 +49,53 @@ export default function AuthConfirmPage() {
+             ? 'Platnost tohoto odkazu vypršela nebo byl již použit. Požádejte o novou pozvánku.'
+             : `Chyba při ověření: ${error.message}`
+         )
++        setPageState('error')
+         return
+       }
+ 
+-      if (type === 'invite') {
+-        try {
+-          await fetch('/api/auth/accept-invite', { method: 'POST' })
+-        } catch {
+-          // joined_at zůstane NULL — admin to uvidí v dashboardu, není to blocker
+-        }
++      if (type === 'invite' || type === 'recovery') {
++        setFlowType(type)
++        setPageState('set-password')
++      } else {
++        router.replace('/dashboard')
+       }
+-
+-      router.replace('/dashboard')
+     })
+   }, [router])
+ 
+-  if (!errorMsg) {
++  const handleSetPassword = async (e: React.FormEvent) => {
++    e.preventDefault()
++    setFormError('')
++
++    if (password.length < 8) {
++      setFormError('Heslo musí mít alespoň 8 znaků.')
++      return
++    }
++    if (password !== confirmPassword) {
++      setFormError('Hesla se neshodují.')
++      return
++    }
++
++    setSaving(true)
++    const supabase = createClient()
++    const { error } = await supabase.auth.updateUser({ password })
++    if (error) {
++      setFormError(`Chyba při nastavení hesla: ${error.message}`)
++      setSaving(false)
++      return
++    }
++
++    if (flowType === 'invite') {
++      try {
++        await fetch('/api/auth/accept-invite', { method: 'POST' })
++      } catch {
++        // joined_at zůstane NULL — admin to uvidí v dashboardu, není to blocker
++      }
++    }
++
++    router.replace('/dashboard')
++  }
++
++  if (pageState === 'loading') {
+     return (
+       <div className="min-h-screen bg-[#111111] flex items-center justify-center">
+         <div className="flex items-center gap-3 text-white text-sm">
+@@ -68,6 +109,39 @@ export default function AuthConfirmPage() {
+     )
+   }
+ 
++  if (pageState === 'error') {
++    return (
++      <div className="min-h-screen bg-[#111111] flex items-center justify-center p-4">
++        <div
++          className="absolute inset-0 opacity-5"
++          style={{
++            backgroundImage:
++              'linear-gradient(#F04E12 1px, transparent 1px), linear-gradient(90deg, #F04E12 1px, transparent 1px)',
++            backgroundSize: '60px 60px',
++          }}
++        />
++        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
++          <div className="h-1 bg-red-500" />
++          <div className="p-8 text-center">
++            <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center mx-auto mb-4">
++              <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
++              </svg>
++            </div>
++            <h1 className="text-lg font-bold text-[#111111] mb-2">Pozvánku nelze použít</h1>
++            <p className="text-gray-500 text-sm mb-6">{errorMsg}</p>
++            <a
++              href="/login"
++              className="inline-block bg-[#F04E12] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
++            >
++              Zpět na přihlášení
++            </a>
++          </div>
++        </div>
++      </div>
++    )
++  }
++
+   return (
+     <div className="min-h-screen bg-[#111111] flex items-center justify-center p-4">
+       <div
+@@ -79,21 +153,51 @@ export default function AuthConfirmPage() {
+         }}
+       />
+       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+-        <div className="h-1 bg-red-500" />
+-        <div className="p-8 text-center">
+-          <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center mx-auto mb-4">
+-            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
++        <div className="h-1 bg-[#F04E12]" />
++        <div className="p-8">
++          <div className="w-12 h-12 bg-[#F04E12]/10 rounded-xl flex items-center justify-center mx-auto mb-4">
++            <svg className="w-6 h-6 text-[#F04E12]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+             </svg>
+           </div>
+-          <h1 className="text-lg font-bold text-[#111111] mb-2">Pozvánku nelze použít</h1>
+-          <p className="text-gray-500 text-sm mb-6">{errorMsg}</p>
+-          <a
+-            href="/login"
+-            className="inline-block bg-[#F04E12] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors"
+-          >
+-            Zpět na přihlášení
+-          </a>
++          <h1 className="text-lg font-bold text-[#111111] mb-1 text-center">Nastavte si heslo</h1>
++          <p className="text-gray-500 text-sm mb-6 text-center">Zvolte heslo pro přihlášení do aplikace.</p>
++
++          <form onSubmit={handleSetPassword} className="space-y-4">
++            <div>
++              <label className="block text-xs font-medium text-gray-600 mb-1.5">Heslo</label>
++              <input
++                type="password"
++                value={password}
++                onChange={(e) => setPassword(e.target.value)}
++                placeholder="Alespoň 8 znaků"
++                autoFocus
++                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12] focus:border-transparent"
++              />
++            </div>
++            <div>
++              <label className="block text-xs font-medium text-gray-600 mb-1.5">Potvrzení hesla</label>
++              <input
++                type="password"
++                value={confirmPassword}
++                onChange={(e) => setConfirmPassword(e.target.value)}
++                placeholder="Zopakujte heslo"
++                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12] focus:border-transparent"
++              />
++            </div>
++
++            {formError && (
++              <p className="text-red-500 text-sm">{formError}</p>
++            )}
++
++            <button
++              type="submit"
++              disabled={saving}
++              className="w-full py-2.5 bg-[#F04E12] text-white rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
++            >
++              {saving ? 'Nastavuji…' : 'Nastavit heslo a pokračovat'}
++            </button>
++          </form>
+         </div>
+       </div>
+     </div>
