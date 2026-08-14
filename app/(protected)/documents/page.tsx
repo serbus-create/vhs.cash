@@ -9,7 +9,7 @@ import { formatCurrency, formatDate, monthLabel, STATUS_LABELS, TYPE_LABELS, STA
 import { useUserRole } from '@/lib/useUserRole'
 import MonthNav from '@/components/month-nav'
 
-type EntityFilter = 'all' | 'osvc' | 'sro'
+type EntityFilter = 'all' | string
 
 const STATUS_OPTIONS = ['', 'draft', 'issued', 'sent', 'paid', 'overdue', 'cancelled']
 
@@ -24,6 +24,7 @@ export default function DocumentsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [navDate, setNavDate] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 })
   const [entityFilter, setEntityFilter] = useState<EntityFilter>('all')
+  const [companyProfiles, setCompanyProfiles] = useState<{ id: string; name: string }[]>([])
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [openStatusId, setOpenStatusId] = useState<string | null>(null)
@@ -50,8 +51,7 @@ export default function DocumentsPage() {
       const dt = new Date(dateStr)
       if (dt.getFullYear() !== navDate.year || dt.getMonth() + 1 !== navDate.month) return false
       if (entityFilter === 'all') return true
-      const want = entityFilter === 'osvc' ? 'osvč' : 'sro'
-      return (doc as any).company_profiles?.profile_type === want
+      return (doc as any).company_profile_id === entityFilter
     })
   }, [documents, navDate, entityFilter])
 
@@ -73,6 +73,12 @@ export default function DocumentsPage() {
   }, [typeFilter, statusFilter, workspaceId])
 
   useEffect(() => { loadDocs() }, [loadDocs])
+
+  useEffect(() => {
+    if (!workspaceId) return
+    supabase.from('company_profiles').select('id, name').eq('workspace_id', workspaceId).order('name')
+      .then(({ data }) => setCompanyProfiles(data ?? []))
+  }, [workspaceId])
 
   useEffect(() => {
     if (!openStatusId) return
@@ -181,21 +187,23 @@ export default function DocumentsPage() {
       <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 mb-6">
         <MonthNav navDate={navDate} onPrev={goPrev} onNext={goNext} />
 
-        <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5">
-          {(['osvc', 'sro', 'all'] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setEntityFilter(v)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                entityFilter === v
-                  ? 'bg-[#F04E12] text-white shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {v === 'all' ? 'Vše' : v === 'osvc' ? 'OSVČ' : 's.r.o.'}
-            </button>
-          ))}
-        </div>
+        {companyProfiles.length > 1 && (
+          <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5">
+            {[{ id: 'all', name: 'Vše' }, ...companyProfiles].map(({ id, name }) => (
+              <button
+                key={id}
+                onClick={() => setEntityFilter(id)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  entityFilter === id
+                    ? 'bg-[#F04E12] text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
 
         <select
           value={typeFilter}

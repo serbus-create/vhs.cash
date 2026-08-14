@@ -25,11 +25,12 @@ interface AccountingDoc {
   total_with_vat: number
   amount_czk: number | null
   paid_amount: number | null
+  company_profile_id: string | null
   clients: { name: string } | null
   company_profiles: { name: string; profile_type: string } | null
 }
 
-type EntityFilter = 'all' | 'osvc' | 'sro'
+type EntityFilter = 'all' | string
 type Tab = 'faktury' | 'podklady'
 
 interface DriveFile {
@@ -90,6 +91,7 @@ export default function AccountingPage() {
   // — Faktury tab state —
   const [navDate, setNavDate] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 })
   const [entityFilter, setEntityFilter] = useState<EntityFilter>('all')
+  const [companyProfiles, setCompanyProfiles] = useState<{ id: string; name: string }[]>([])
   const [docs, setDocs] = useState<AccountingDoc[]>([])
   const [loading, setLoading] = useState(true)
   const [downloading, setDownloading] = useState(false)
@@ -106,19 +108,26 @@ export default function AccountingPage() {
 
   useEffect(() => {
     if (!workspaceId) return
-    supabase
-      .from('documents')
-      .select(
-        'id, number, status, issue_date, due_date, currency, total_with_vat, amount_czk, paid_amount, clients(name), company_profiles(name, profile_type)',
-      )
-      .eq('workspace_id', workspaceId)
-      .eq('type', 'faktura')
-      .neq('status', 'draft')
-      .order('issue_date', { ascending: false })
-      .then(({ data }) => {
-        setDocs((data ?? []) as unknown as AccountingDoc[])
-        setLoading(false)
-      })
+    Promise.all([
+      supabase
+        .from('documents')
+        .select(
+          'id, number, status, issue_date, due_date, currency, total_with_vat, amount_czk, paid_amount, company_profile_id, clients(name), company_profiles(name, profile_type)',
+        )
+        .eq('workspace_id', workspaceId)
+        .eq('type', 'faktura')
+        .neq('status', 'draft')
+        .order('issue_date', { ascending: false }),
+      supabase
+        .from('company_profiles')
+        .select('id, name')
+        .eq('workspace_id', workspaceId)
+        .order('name'),
+    ]).then(([docsRes, profilesRes]) => {
+      setDocs((docsRes.data ?? []) as unknown as AccountingDoc[])
+      setCompanyProfiles(profilesRes.data ?? [])
+      setLoading(false)
+    })
   }, [workspaceId])
 
   // — Faktury navigation —
@@ -151,8 +160,7 @@ export default function AccountingPage() {
       const dt = new Date(d.issue_date)
       if (dt.getFullYear() !== navDate.year || dt.getMonth() + 1 !== navDate.month) return false
       if (entityFilter === 'all') return true
-      const want = entityFilter === 'osvc' ? 'osvč' : 'sro'
-      return d.company_profiles?.profile_type === want
+      return d.company_profile_id === entityFilter
     })
   }, [docs, navDate, entityFilter])
 
@@ -309,21 +317,23 @@ export default function AccountingPage() {
             <MonthNav navDate={navDate} onPrev={goPrev} onNext={goNext} />
 
             {/* Entity filter */}
-            <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5">
-              {(['osvc', 'sro', 'all'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setEntityFilter(v)}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    entityFilter === v
-                      ? 'bg-[#F04E12] text-white shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {v === 'all' ? 'Vše' : v === 'osvc' ? 'OSVČ' : 's.r.o.'}
-                </button>
-              ))}
-            </div>
+            {companyProfiles.length > 1 && (
+              <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5">
+                {[{ id: 'all', name: 'Vše' }, ...companyProfiles].map(({ id, name }) => (
+                  <button
+                    key={id}
+                    onClick={() => setEntityFilter(id)}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      entityFilter === id
+                        ? 'bg-[#F04E12] text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* ZIP download */}
             <div className="ml-auto flex items-center gap-3">
