@@ -17,6 +17,7 @@ export interface CompanyProfile {
   vat_payer: boolean
   profile_type: 'sro' | 'osvč'
   spisova_znacka: string | null
+  invoice_number_series: number
   created_at: string
 }
 

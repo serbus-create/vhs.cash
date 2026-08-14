@@ -29,6 +29,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<CompanyProfile | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [vatPayer, setVatPayer] = useState(true)
+  const [invoiceSeries, setInvoiceSeries] = useState(1)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
@@ -54,6 +55,10 @@ export default function SettingsPage() {
     setEditing(null)
     setForm(EMPTY_FORM)
     setVatPayer(true)
+    const nextSeries = profiles.length > 0
+      ? Math.max(...profiles.map((p) => p.invoice_number_series ?? 1)) + 1
+      : 1
+    setInvoiceSeries(nextSeries)
     setError('')
     setShowModal(true)
   }
@@ -77,6 +82,7 @@ export default function SettingsPage() {
       spisova_znacka: p.spisova_znacka ?? '',
     })
     setVatPayer(p.vat_payer ?? true)
+    setInvoiceSeries(p.invoice_number_series ?? 1)
     setError('')
     setShowModal(true)
   }
@@ -85,12 +91,20 @@ export default function SettingsPage() {
     if (!form.name.trim()) { setError('Název je povinný'); return }
     setSaving(true)
     setError('')
+
+    const seriesError = (err: { code?: string; message: string }) => {
+      if (err.code === '23505' && err.message.includes('company_profiles_series_unique')) {
+        return 'Tato číselná řada je ve workspace již použita, zvolte jinou.'
+      }
+      return err.message
+    }
+
     if (editing) {
       const { error: err } = await supabase
         .from('company_profiles')
-        .update({ ...form, vat_payer: vatPayer })
+        .update({ ...form, vat_payer: vatPayer, invoice_number_series: invoiceSeries })
         .eq('id', editing.id)
-      if (err) { setError(err.message); setSaving(false); return }
+      if (err) { setError(seriesError(err)); setSaving(false); return }
     } else {
       if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); setSaving(false); return }
       const { data: { user } } = await supabase.auth.getUser()
@@ -98,11 +112,12 @@ export default function SettingsPage() {
       const { error: err } = await supabase.from('company_profiles').insert({
         ...form,
         vat_payer: vatPayer,
+        invoice_number_series: invoiceSeries,
         user_id: user!.id,
         workspace_id: workspaceId,
         is_default: isFirst,
       })
-      if (err) { setError(err.message); setSaving(false); return }
+      if (err) { setError(seriesError(err)); setSaving(false); return }
     }
 
     setSaving(false)
@@ -384,6 +399,24 @@ export default function SettingsPage() {
                     {...f('spisova_znacka')}
                   />
                 )}
+
+                {/* Invoice number series */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                    Číselná řada faktur
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={invoiceSeries}
+                    onChange={(e) => setInvoiceSeries(Math.max(1, parseInt(e.target.value) || 1))}
+                    disabled={!isAdmin}
+                    className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12] disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Série {invoiceSeries} → faktury {invoiceSeries * 1000 + 1}–{invoiceSeries * 1000 + 999}
+                  </p>
+                </div>
 
                 {/* Bank details section */}
                 <div className="pt-2">

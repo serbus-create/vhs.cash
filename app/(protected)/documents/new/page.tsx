@@ -89,8 +89,7 @@ export default function NewDocumentPage() {
     let seq: string
     if (type === 'faktura' && profileId) {
       const profile = companyProfiles.find((p) => p.id === profileId)
-      // OSVČ → 1xxx series (1001–1999), s.r.o. → 2xxx series (2001–2999)
-      const rangeStart = profile?.profile_type === 'sro' ? 2000 : 1000
+      const rangeStart = (profile?.invoice_number_series ?? 1) * 1000
 
       const { data: existing } = await supabase
         .from('documents')
