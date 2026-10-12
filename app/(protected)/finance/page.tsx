@@ -87,6 +87,7 @@ export default function FinancePage() {
         'id, number, status, issue_date, due_date, currency, total_with_vat, amount_czk, company_profile_id, clients(name), company_profiles(name, profile_type)',
       )
       .eq('workspace_id', workspaceId)
+      .eq('type', 'faktura')
       .neq('status', 'draft')
       .order('issue_date', { ascending: false })
       .then(({ data }) => {

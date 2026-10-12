@@ -89,6 +89,7 @@ export default function DashboardPage() {
         'id, number, type, status, issue_date, due_date, currency, total_with_vat, amount_czk, paid_amount, clients(name), company_profiles(name, profile_type)',
       )
       .eq('workspace_id', workspaceId)
+      .eq('type', 'faktura')
       .neq('status', 'draft')
       .order('issue_date', { ascending: false })
       .then(({ data }) => {
@@ -142,7 +143,7 @@ export default function DashboardPage() {
 
   // overdue count for banner
   const overdueCount = useMemo(
-    () => entityFiltered.filter((d) => getDisplayStatus(d.status, d.due_date) === 'overdue').length,
+    () => entityFiltered.filter((d) => d.type === 'faktura' && getDisplayStatus(d.status, d.due_date) === 'overdue').length,
     [entityFiltered],
   )
 
@@ -159,7 +160,7 @@ export default function DashboardPage() {
     [selectedYears],
   )
   const chartData = useMemo(() => {
-    const paid = entityFiltered.filter((d) => getDisplayStatus(d.status, d.due_date) === 'paid')
+    const paid = entityFiltered.filter((d) => d.type === 'faktura' && getDisplayStatus(d.status, d.due_date) === 'paid')
     return chartMonths.map((m) => {
       const row: Record<string, number | string> = { month: m.short }
       for (const year of chartYears) {
@@ -335,7 +336,7 @@ export default function DashboardPage() {
         <StatCard label="Zaplaceno" value={formatCurrency(kpiPaid)} color="green" />
         <StatCard label="K úhradě" value={formatCurrency(kpiPending)} color="blue" />
         <StatCard label="Po splatnosti" value={formatCurrency(kpiOverdue)} color="orange" />
-        <StatCard label="Dokumenty" value={String(kpiDocCount)} color="gray" />
+        <StatCard label="Faktury" value={String(kpiDocCount)} color="gray" />
       </div>
 
       {/* Overdue banner */}

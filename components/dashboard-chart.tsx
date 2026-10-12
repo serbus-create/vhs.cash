@@ -66,6 +66,7 @@ export default function DashboardChart() {
     supabase
       .from('documents')
       .select('status, issue_date, due_date, amount_czk, total_with_vat, company_profiles(profile_type)')
+      .eq('type', 'faktura')
       .neq('status', 'draft')
       .then(({ data }) => {
         setDocs((data ?? []) as unknown as ChartDoc[])
