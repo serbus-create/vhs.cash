@@ -40,11 +40,13 @@ export interface Client {
   email: string | null
   phone: string | null
   country: string | null
+  entity_type?: 'firma' | 'osvc' | null
+  represented_by?: string | null
   created_at: string
 }
 
 export type DocumentType = 'faktura' | 'nabidka' | 'objednavka'
-export type DocumentStatus = 'draft' | 'issued' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+export type DocumentStatus = 'draft' | 'issued' | 'sent' | 'paid' | 'overdue' | 'cancelled' | 'confirmed' | 'expired'
 
 export interface Document {
   id: string
@@ -67,8 +69,32 @@ export interface Document {
   paid_amount?: number | null
   discount_percent: number
   discount_note: string | null
+  contact_name?: string | null
+  contact_email?: string | null
+  terms_template_id?: string | null
+  terms_values?: Record<string, string> | null
+  terms_snapshot?: string | null
+  terms_hash?: string | null
+  terms_sent_at?: string | null
+  terms_expires_at?: string | null
+  confirm_token_hash?: string | null
+  confirmed_at?: string | null
+  confirmed_by_name?: string | null
+  confirmed_by_role?: string | null
+  confirmed_by_email?: string | null
+  confirmed_ip?: string | null
   created_at: string
   clients?: Client | null
+}
+
+export interface TermsTemplate {
+  id: string
+  workspace_id: string
+  version: number
+  body: string
+  defaults: Record<string, string>
+  is_active: boolean
+  created_at: string
 }
 
 export interface DocumentItem {

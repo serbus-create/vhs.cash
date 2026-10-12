@@ -25,6 +25,8 @@ export const STATUS_LABELS: Record<string, string> = {
   paid: 'Zaplaceno',
   overdue: 'Po splatnosti',
   cancelled: 'Stornováno',
+  confirmed: 'Potvrzeno',
+  expired: 'Vypršelo',
 }
 
 export const TYPE_LABELS: Record<string, string> = {
@@ -40,9 +42,11 @@ export const STATUS_COLORS: Record<string, string> = {
   paid: 'bg-green-100 text-green-700',
   overdue: 'bg-[#FEE9E2] text-[#F04E12]',
   cancelled: 'bg-red-100 text-red-700',
+  confirmed: 'bg-green-100 text-green-700',
+  expired: 'bg-gray-100 text-gray-500',
 }
 
-const FINAL_STATUSES = new Set(['paid', 'cancelled', 'storno'])
+const FINAL_STATUSES = new Set(['paid', 'cancelled', 'storno', 'confirmed', 'expired'])
 
 export function getDisplayStatus(status: string, dueDate: string | null | undefined): string {
   if (!FINAL_STATUSES.has(status) && dueDate) {
