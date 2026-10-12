@@ -44,6 +44,8 @@ export default function EditDocumentPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [docType, setDocType] = useState<DocumentType>('faktura')
+  // nabídka zatím nemá vlastní seznam → vrací se na faktury
+  const backHref = docType === 'objednavka' ? '/objednavky' : '/faktury'
   const [status, setStatus] = useState<DocumentStatus>('draft')
   const [number, setNumber] = useState('')
   const [clientId, setClientId] = useState('')
@@ -249,8 +251,8 @@ export default function EditDocumentPage() {
     return (
       <div className="p-8">
         <p className="text-gray-500">Dokument nenalezen.</p>
-        <button onClick={() => router.push('/documents')} className="text-[#F04E12] mt-2 text-sm hover:underline">
-          ← Zpět na dokumenty
+        <button onClick={() => router.push(backHref)} className="text-[#F04E12] mt-2 text-sm hover:underline">
+          ← Zpět na seznam
         </button>
       </div>
     )
@@ -261,7 +263,7 @@ export default function EditDocumentPage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push('/documents')} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={() => router.push(backHref)} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -633,7 +635,7 @@ export default function EditDocumentPage() {
             </span>
           )}
           <button
-            onClick={() => router.push('/documents')}
+            onClick={() => router.push(backHref)}
             className="px-5 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
           >
             Zpět

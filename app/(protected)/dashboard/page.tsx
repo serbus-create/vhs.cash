@@ -348,7 +348,7 @@ export default function DashboardPage() {
           <p className="flex-1 font-semibold text-red-700 text-sm">
             {overdueCount} {overdueCount === 1 ? 'faktura po splatnosti' : 'faktury po splatnosti'}
           </p>
-          <Link href="/documents?status=overdue" className="text-red-600 text-xs font-medium hover:underline shrink-0">
+          <Link href="/faktury?status=overdue" className="text-red-600 text-xs font-medium hover:underline shrink-0">
             Zobrazit →
           </Link>
         </div>
@@ -357,8 +357,8 @@ export default function DashboardPage() {
       {/* Recent docs table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-[#111111] text-sm">Poslední dokumenty</h2>
-          <Link href="/documents" className="text-[#F04E12] text-sm hover:underline">
+          <h2 className="font-semibold text-[#111111] text-sm">Poslední faktury</h2>
+          <Link href="/faktury" className="text-[#F04E12] text-sm hover:underline">
             Zobrazit vše →
           </Link>
         </div>
@@ -385,10 +385,10 @@ export default function DashboardPage() {
           })}
           {recentDocs.length === 0 && (
             <div className="p-8 text-center text-gray-400 text-sm">
-              Žádné dokumenty.{' '}
+              Žádné faktury.{' '}
               {isAdmin && (
-                <Link href="/documents/new" className="text-[#F04E12] hover:underline">
-                  Vytvořte první.
+                <Link href="/documents/new?type=faktura" className="text-[#F04E12] hover:underline">
+                  Vytvořte první fakturu.
                 </Link>
               )}
             </div>
@@ -447,10 +447,10 @@ export default function DashboardPage() {
               ) : (
                 <tr>
                   <td colSpan={6} className="px-6 py-16 text-center text-gray-400 text-sm">
-                    Žádné dokumenty.{' '}
+                    Žádné faktury.{' '}
                     {isAdmin && (
-                      <Link href="/documents/new" className="text-[#F04E12] hover:underline">
-                        Vytvořte první.
+                      <Link href="/documents/new?type=faktura" className="text-[#F04E12] hover:underline">
+                        Vytvořte první fakturu.
                       </Link>
                     )}
                   </td>

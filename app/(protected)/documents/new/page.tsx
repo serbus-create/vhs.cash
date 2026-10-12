@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useUserRole } from '@/lib/useUserRole'
 import type { Client, CompanyProfile } from '@/lib/types'
@@ -29,12 +29,15 @@ const newItem = (): LineItem => ({
 
 const numericPart = (s: string) => s.replace(/\D/g, '')
 
-export default function NewDocumentPage() {
+function NewDocumentForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const typeParam = searchParams.get('type')
+  const initialType = typeParam === 'objednavka' || typeParam === 'nabidka' ? typeParam : 'faktura'
   const supabase = createClient()
   const { workspaceId } = useUserRole()
 
-  const [docType, setDocType] = useState<'faktura' | 'nabidka' | 'objednavka'>('faktura')
+  const [docType, setDocType] = useState<'faktura' | 'nabidka' | 'objednavka'>(initialType)
   const [number, setNumber] = useState('')
   const [clientId, setClientId] = useState('')
   const [subject, setSubject] = useState('')
@@ -222,7 +225,7 @@ export default function NewDocumentPage() {
       }
     }
 
-    router.push('/documents')
+    router.push(docType === 'objednavka' ? '/objednavky' : '/faktury')
   }
 
   return (
@@ -645,5 +648,13 @@ export default function NewDocumentPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function NewDocumentPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewDocumentForm />
+    </Suspense>
   )
 }
