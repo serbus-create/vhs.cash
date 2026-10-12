@@ -28,3 +28,10 @@ next-env.d.ts
 
 # Google service account key files
 *-[0-9a-f]*.json
+
+# docasne soubory ke kontrole
+*-diff.txt
+*-review.*
+*analyza*
+faze-podminky-*.txt
+ukol*.txt
