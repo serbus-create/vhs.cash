@@ -7,6 +7,7 @@ import { useUserRole } from '@/lib/useUserRole'
 
 const EMPTY_FORM = {
   name: '', ico: '', dic: '', address: '', city: '', zip: '', email: '', phone: '',
+  entity_type: '', represented_by: '',
 }
 
 const COUNTRIES = [
@@ -62,7 +63,7 @@ export default function ClientsPage() {
 
   const openEdit = (c: Client) => {
     setEditing(c)
-    setForm({ name: c.name, ico: c.ico ?? '', dic: c.dic ?? '', address: c.address ?? '', city: c.city ?? '', zip: c.zip ?? '', email: c.email ?? '', phone: c.phone ?? '' })
+    setForm({ name: c.name, ico: c.ico ?? '', dic: c.dic ?? '', address: c.address ?? '', city: c.city ?? '', zip: c.zip ?? '', email: c.email ?? '', phone: c.phone ?? '', entity_type: c.entity_type ?? '', represented_by: c.represented_by ?? '' })
     setCountry(c.country ?? 'CZ')
     setError('')
     setLookupError('')
@@ -108,13 +109,21 @@ export default function ClientsPage() {
     setSaving(true)
     setError('')
 
+    const entityType = form.entity_type === 'firma' || form.entity_type === 'osvc' ? form.entity_type : null
+    const payload = {
+      ...form,
+      entity_type: entityType,
+      represented_by: entityType === 'firma' ? form.represented_by.trim() || null : null,
+      country,
+    }
+
     if (editing) {
-      const { error: err } = await supabase.from('clients').update({ ...form, country }).eq('id', editing.id)
+      const { error: err } = await supabase.from('clients').update(payload).eq('id', editing.id)
       if (err) { setError(err.message); setSaving(false); return }
     } else {
       if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); setSaving(false); return }
       const { data: { user } } = await supabase.auth.getUser()
-      const { error: err } = await supabase.from('clients').insert({ ...form, country, user_id: user!.id, workspace_id: workspaceId })
+      const { error: err } = await supabase.from('clients').insert({ ...payload, user_id: user!.id, workspace_id: workspaceId })
       if (err) { setError(err.message); setSaving(false); return }
     }
 
@@ -340,6 +349,32 @@ export default function ClientsPage() {
                   <FormField label="Město" placeholder="Praha" {...field('city')} />
                   <FormField label="PSČ" placeholder="110 00" {...field('zip')} />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Typ klienta</label>
+                  <select
+                    value={form.entity_type}
+                    onChange={(e) => setForm((f) => ({ ...f, entity_type: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                  >
+                    <option value="">Neurčeno</option>
+                    <option value="firma">Firma (s.r.o., a.s., spolek ...)</option>
+                    <option value="osvc">OSVČ (fyzická osoba podnikající)</option>
+                  </select>
+                </div>
+
+                {form.entity_type === 'firma' && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Zástupce (pro podmínky spolupráce)</label>
+                    <textarea
+                      value={form.represented_by}
+                      onChange={(e) => setForm((f) => ({ ...f, represented_by: e.target.value }))}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Pište ve 7. pádu za slovem zastoupená, například: jednatelem Janem Novákem.</p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <FormField label="Email" placeholder="info@firma.cz" {...field('email')} />

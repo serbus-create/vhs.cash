@@ -117,8 +117,10 @@ export async function generateOrderPdf(input: OrderPdfInput): Promise<OrderPdfRe
   const missing = [
     ...result.missing,
     ...supplier.missing.map((m) => `dodavatel.${m}`),
-    ...clientParty.missing.map((m) => `klient.${m}`),
+    // spisová značka se u klienta nevyžaduje
+    ...clientParty.missing.filter((m) => m !== 'spisova_znacka').map((m) => `klient.${m}`),
   ]
+  if (!(client?.entity_type ?? '').trim()) missing.push('klient.entity_type')
   if (rezim === 'hodinova' && !(tv.hodinova_sazba ?? '').trim()) missing.push('hodinova_sazba')
 
   const pdf: Buffer = await renderToBuffer(

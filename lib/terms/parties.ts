@@ -44,9 +44,15 @@ export function partyKind(party: PartyInput): PartyKind {
   return 'neurceno'
 }
 
+/** PSČ z přesně pěti číslic bez mezery se zobrazí jako "XXX XX"; jiné hodnoty beze změny. */
+export function formatZip(zip: string | null | undefined): string {
+  const z = clean(zip)
+  return /^\d{5}$/.test(z) ? `${z.slice(0, 3)} ${z.slice(3)}` : z
+}
+
 function formatAddress(party: PartyInput): string {
   const street = clean(party.address)
-  const zipCity = [clean(party.zip), clean(party.city)].filter(Boolean).join(' ')
+  const zipCity = [formatZip(party.zip), clean(party.city)].filter(Boolean).join(' ')
   return [street, zipCity].filter(Boolean).join(', ')
 }
 

@@ -64,6 +64,18 @@ export default function OrderTermsSection({
         </div>
 
         <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Termín</label>
+          <input
+            value={value.terminText}
+            onChange={(e) => set({ terminText: e.target.value })}
+            disabled={disabled}
+            maxLength={200}
+            placeholder="dle dohody, například do 30. 10. 2026"
+            className={inputCls(disabled)}
+          />
+        </div>
+
+        <div className="sm:col-span-2">
           <span className="block text-xs font-medium text-gray-600 mb-1.5">Způsob ceny</span>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             {RADIOS.map((r) => (

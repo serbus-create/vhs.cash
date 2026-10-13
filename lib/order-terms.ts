@@ -17,7 +17,12 @@ export interface OrderTermsState {
   /** uživatel zálohu (procenta nebo "Bez zálohy") ručně změnil */
   zalohaTouched: boolean
   odhadText: string
+  /** termín plnění, volný text (výchozí 'dle dohody') */
+  terminText: string
 }
+
+export const DEFAULT_TERMIN = 'dle dohody'
+export const TERMIN_MAX = 200
 
 export const isPriced = (r: CenaRezim): boolean => r === 'pevna'
 
@@ -30,6 +35,7 @@ export const initialOrderTerms = (): OrderTermsState => ({
   bezZalohy: false,
   zalohaTouched: false,
   odhadText: '',
+  terminText: DEFAULT_TERMIN,
 })
 
 const asRezim = (v: unknown): CenaRezim =>
@@ -52,6 +58,7 @@ export function parseOrderTerms(doc: {
     bezZalohy: tv.zaloha_objednavka_procent === '0',
     zalohaTouched: tv.zaloha_objednavka_procent !== undefined,
     odhadText: tv.odhad_text ?? '',
+    terminText: tv.termin_text?.trim() || DEFAULT_TERMIN,
   }
 }
 
@@ -77,6 +84,8 @@ export function validateOrderTerms(s: OrderTermsState, strict: boolean): string 
       if (!Number.isFinite(n) || n <= 0) return 'Hodinová sazba musí být číslo větší než 0'
     }
   }
+
+  if (s.terminText.trim().length > TERMIN_MAX) return `Termín může mít nejvýše ${TERMIN_MAX} znaků`
 
   if (!s.bezZalohy) {
     const dep = s.zalohaProcent.trim()
@@ -104,6 +113,8 @@ export function buildOrderTermsPayload(s: OrderTermsState, existing: TermsValues
   if (odhad && s.cenaRezim === 'hodinova') merged.odhad_text = odhad
   else delete merged.odhad_text
 
+  merged.termin_text = s.terminText.trim().slice(0, TERMIN_MAX) || DEFAULT_TERMIN
+
   return {
     contact_name: s.contactName.trim() || null,
     contact_email: s.contactEmail.trim() || null,
@@ -129,11 +140,13 @@ const PARTY_FIELD_LABELS: Record<string, string> = {
   ico: 'IČO',
   spisova_znacka: 'spisová značka',
   represented_by: 'zástupce firmy',
+  entity_type: 'typ klienta (firma, OSVČ)',
 }
 
 /** Čitelný název chybějícího údaje z hlavičky X-Terms-Missing, např. "dodavatel.ico" -> "IČO dodavatele". */
 export function missingLabel(key: string): string {
   if (key === 'hodinova_sazba') return 'hodinová sazba'
+  if (key === 'klient.entity_type') return PARTY_FIELD_LABELS.entity_type
   const [party, field] = key.split('.')
   if ((party === 'dodavatel' || party === 'klient') && field) {
     const label = PARTY_FIELD_LABELS[field] ?? field

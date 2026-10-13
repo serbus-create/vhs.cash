@@ -2,6 +2,7 @@ import React from 'react'
 import { Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { DocumentWithItems, Client, CompanyProfile } from '@/lib/types'
 import { formatCzNumber } from '@/lib/terms/render'
+import { formatZip } from '@/lib/terms/parties'
 import SupplierSignatures from './supplier-signatures'
 import ConfirmationStamp from './confirmation-stamp'
 
@@ -242,8 +243,8 @@ export default function OrderPage({
   const priced = rezim === 'pevna'
 
   const supplierName = companyProfile?.name ?? '—'
-  const supplierCityZip = [companyProfile?.zip, companyProfile?.city].filter(Boolean).join(' ')
-  const clientCityZip = [client?.zip, client?.city].filter(Boolean).join(' ')
+  const supplierCityZip = [formatZip(companyProfile?.zip), companyProfile?.city].filter(Boolean).join(' ')
+  const clientCityZip = [formatZip(client?.zip), client?.city].filter(Boolean).join(' ')
 
   const rate = (tv.hodinova_sazba ?? '').trim()
   const rateNum = Number(rate.replace(',', '.'))
@@ -315,6 +316,7 @@ export default function OrderPage({
       {/* ── Položky ── */}
       <View style={styles.tableSection}>
         {doc.subject && <Text style={styles.subject}>Předmět zakázky: {doc.subject}</Text>}
+        <Text style={styles.subject}>Termín: {(tv.termin_text ?? '').trim() || 'dle dohody'}</Text>
 
         <View style={styles.tableHeader} wrap={false}>
           <Text style={[styles.tableHeaderCell, styles.colNum]}>#</Text>
