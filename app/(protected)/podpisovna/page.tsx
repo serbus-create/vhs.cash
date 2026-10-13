@@ -29,10 +29,22 @@ function Contact({ doc }: { doc: Document }) {
   )
 }
 
-// sent s uplynulým terms_expires_at se zobrazuje jako Vypršelo (zápis stavu až v kroku 2b)
+// sent s uplynulým terms_expires_at se zobrazuje jako Vypršelo (zápis stavu provede veřejná stránka při otevření odkazu)
 const isExpiredSent = (d: Document) =>
   d.status === 'sent' && !!d.terms_expires_at && new Date(d.terms_expires_at) < new Date()
 const displayStatus = (d: Document) => (isExpiredSent(d) ? 'expired' : d.status)
+
+const fmtDateTime = (v: string) =>
+  new Intl.DateTimeFormat('cs-CZ', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Prague' }).format(new Date(v))
+
+function ConfirmedBy({ doc }: { doc: Document }) {
+  return (
+    <div className="text-sm">
+      <div className="text-[#111111]">{doc.confirmed_by_name ?? '—'}{doc.confirmed_by_role ? `, ${doc.confirmed_by_role}` : ''}</div>
+      <div className="text-gray-500">{doc.confirmed_at ? fmtDateTime(doc.confirmed_at) : '—'}</div>
+    </div>
+  )
+}
 
 function StatusBadge({ status }: { status: string }) {
   return (
@@ -113,7 +125,14 @@ export default function PodpisovnaPage() {
         {doc.status === 'sent' && (
           <button onClick={() => revoke(doc)} disabled={!isAdmin} title={adminTitle} className={btnCls(isAdmin)}>Zrušit odeslání</button>
         )}
-        {ds === 'confirmed' && <PreviewButton doc={doc} />}
+        {ds === 'confirmed' && (
+          <a
+            href={`/api/pdf?id=${encodeURIComponent(doc.id)}`}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-[#111111] hover:border-[#F04E12] hover:text-[#F04E12] transition-colors"
+          >
+            Stáhnout PDF
+          </a>
+        )}
       </div>
     )
   }
@@ -174,7 +193,7 @@ export default function PodpisovnaPage() {
                     <StatusBadge status={displayStatus(doc)} />
                   </div>
                   <p className="text-sm font-medium text-[#111111] mb-1">{(doc.clients as any)?.name ?? '—'}</p>
-                  <Contact doc={doc} />
+                  {tab === 'confirmed' ? <ConfirmedBy doc={doc} /> : <Contact doc={doc} />}
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm font-bold text-[#111111]">{priceOf(doc)}</span>
                     <span className="text-xs text-gray-400">{doc.terms_sent_at ? `Odesláno ${formatDate(doc.terms_sent_at)}` : 'Neodesláno'}</span>
@@ -190,7 +209,7 @@ export default function PodpisovnaPage() {
                 <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-4 py-3">Číslo</th>
                   <th className="px-4 py-3">Klient</th>
-                  <th className="px-4 py-3">Kontaktní osoba</th>
+                  <th className="px-4 py-3">{tab === 'confirmed' ? 'Potvrdil' : 'Kontaktní osoba'}</th>
                   <th className="px-4 py-3">Cena</th>
                   <th className="px-4 py-3">Odesláno</th>
                   <th className="px-4 py-3">Stav</th>
@@ -204,7 +223,7 @@ export default function PodpisovnaPage() {
                       <Link href={`/documents/${doc.id}`} className="text-[#F04E12] hover:underline">{doc.number}</Link>
                     </td>
                     <td className="px-4 py-3 text-sm text-[#111111]">{(doc.clients as any)?.name ?? '—'}</td>
-                    <td className="px-4 py-3"><Contact doc={doc} /></td>
+                    <td className="px-4 py-3">{tab === 'confirmed' ? <ConfirmedBy doc={doc} /> : <Contact doc={doc} />}</td>
                     <td className="px-4 py-3 text-sm font-bold text-[#111111]">{priceOf(doc)}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{doc.terms_sent_at ? formatDate(doc.terms_sent_at) : '—'}</td>
                     <td className="px-4 py-3"><StatusBadge status={displayStatus(doc)} /></td>

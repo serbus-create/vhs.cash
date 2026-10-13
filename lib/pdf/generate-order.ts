@@ -3,7 +3,9 @@ import React from 'react'
 import path from 'path'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { StampData } from '@/components/pdf/confirmation-stamp'
-import OrderPage, { asCenaRezim, orderPricing } from '@/components/pdf/order-pages'
+import OrderPage from '@/components/pdf/order-pages'
+import { asCenaRezim, orderDepositAmountText } from '@/lib/order-summary'
+import { parseSnapshot } from '@/lib/terms/snapshot'
 import { TermsPagesBody } from '@/components/pdf/terms-pages'
 import { buildPartyIdentification, type PartyInput } from '@/lib/terms/parties'
 import { extractVariables, formatCzNumber, renderTerms, type RenderResult } from '@/lib/terms/render'
@@ -57,8 +59,6 @@ export async function loadOrderPdfInput(
   }
 }
 
-const round2 = (n: number) => Math.round(n * 100) / 100
-
 export interface OrderTermsBuild {
   result: RenderResult
   missing: string[]
@@ -86,12 +86,7 @@ export function buildOrderTerms(input: OrderPdfInput): OrderTermsBuild {
   if (depositPct && Number(depositPct.replace(',', '.')) > 0) values.zaloha_procent = depositPct
 
   // zaloha_castka: u pevné ceny základ bez DPH krát procento, jinak prázdné (render vynechá závorku)
-  let zalohaCastka = ''
-  const pct = Number(depositPct.replace(',', '.'))
-  if (rezim === 'pevna' && depositPct && Number.isFinite(pct) && pct > 0) {
-    const amount = round2((orderPricing(doc, client, companyProfile).totalWithoutVat * pct) / 100)
-    zalohaCastka = formatCzNumber(amount, Number.isInteger(amount) ? 0 : 2)
-  }
+  const zalohaCastka = orderDepositAmountText(doc, client, companyProfile)
   values.zaloha_castka = zalohaCastka
 
   const supplierInput: PartyInput = {
@@ -137,22 +132,6 @@ export function buildOrderTerms(input: OrderPdfInput): OrderTermsBuild {
 }
 
 const SNAPSHOT_STATUSES = new Set(['sent', 'confirmed', 'expired'])
-
-/** Platný snapshot podmínek (JSON ve tvaru RenderResult) nebo null. */
-function parseSnapshot(raw: string | null | undefined): RenderResult | null {
-  if (!raw) return null
-  try {
-    const r = JSON.parse(raw)
-    if (
-      r && typeof r.title === 'string' && Array.isArray(r.articles) &&
-      r.articles.every(
-        (a: any) => a && typeof a.title === 'string' && Array.isArray(a.clauses) &&
-          a.clauses.every((c: any) => c && typeof c.id === 'string' && typeof c.text === 'string'),
-      )
-    ) return r as RenderResult
-  } catch {}
-  return null
-}
 
 export async function generateOrderPdf(input: OrderPdfInput): Promise<OrderPdfResult> {
   const { doc, client, companyProfile } = input

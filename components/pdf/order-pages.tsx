@@ -2,14 +2,17 @@ import React from 'react'
 import { Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { DocumentWithItems, Client, CompanyProfile } from '@/lib/types'
 import { formatCzNumber } from '@/lib/terms/render'
+import { asCenaRezim, orderPricing, formatMoney, orderPaymentLines } from '@/lib/order-summary'
 import { formatZip } from '@/lib/terms/parties'
 import SupplierSignatures from './supplier-signatures'
 import ConfirmationStamp, { type StampData } from './confirmation-stamp'
 
+// sdílené funkce žijí v lib/order-summary.ts; re-export kvůli stávajícím importům
+export { asCenaRezim, orderPricing, formatMoney }
+export type { OrderCenaRezim } from '@/lib/order-summary'
+
 const ORANGE = '#F04E12'
 const DARK = '#111111'
-
-export type OrderCenaRezim = 'pevna' | 'hodinova' | 'bez_ceny'
 
 const styles = StyleSheet.create({
   page: {
@@ -174,50 +177,6 @@ const fmtDate = (d: string | null | undefined) => {
   return `${day}.${m}.${y}`
 }
 
-export const asCenaRezim = (v: unknown): OrderCenaRezim =>
-  v === 'hodinova' || v === 'bez_ceny' ? v : 'pevna'
-
-/**
- * Součty objednávky se stejnými pravidly jako invoice-template.tsx:
- * částky ze sloupců total_without_vat / total_with_vat, DPH se ukazuje, je-li dodavatel
- * plátce a nejde o reverse charge (zahraniční klient s DIČ).
- */
-export function orderPricing(
-  doc: DocumentWithItems,
-  client: Client | null,
-  companyProfile: CompanyProfile | null,
-) {
-  const country = client?.country ?? null
-  const supplierIsVatPayer = companyProfile?.vat_payer !== false
-  const isReverseCharge = Boolean(client?.dic) && !!country && country !== 'CZ'
-  const showVat = supplierIsVatPayer && !isReverseCharge
-
-  const totalWithoutVat = doc.total_without_vat ?? 0
-  const totalWithVat = doc.total_with_vat ?? 0
-  const hasItemDiscount = doc.document_items.some((i) => (i.discount_percent ?? 0) > 0)
-  const hasDocDiscount = (doc.discount_percent ?? 0) > 0
-  const subtotalBeforeDocDiscount = doc.document_items.reduce(
-    (s, i) => s + i.quantity * i.unit_price * (1 - (i.discount_percent ?? 0) / 100),
-    0,
-  )
-  return {
-    supplierIsVatPayer,
-    showVat,
-    totalWithoutVat,
-    totalWithVat,
-    vatAmount: totalWithVat - totalWithoutVat,
-    hasItemDiscount,
-    hasDocDiscount,
-    hasAnyDiscount: hasItemDiscount || hasDocDiscount,
-    subtotalBeforeDocDiscount,
-  }
-}
-
-const currencyLabel = (c: string | null | undefined) => (!c || c === 'CZK' ? 'Kč' : c)
-
-export const formatMoney = (n: number, currency: string | null | undefined) =>
-  `${formatCzNumber(n, 2)} ${currencyLabel(currency)}`
-
 function Missing({ children }: { children: string }) {
   return <Text style={styles.priceMissing}>{children}</Text>
 }
@@ -249,16 +208,7 @@ export default function OrderPage({
   const supplierCityZip = [formatZip(companyProfile?.zip), companyProfile?.city].filter(Boolean).join(' ')
   const clientCityZip = [formatZip(client?.zip), client?.city].filter(Boolean).join(' ')
 
-  const rate = (tv.hodinova_sazba ?? '').trim()
-  const rateNum = Number(rate.replace(',', '.'))
-  const rateText = rate ? (Number.isFinite(rateNum) ? formatCzNumber(rateNum, rateNum % 1 === 0 ? 0 : 2) : rate) : null
-  const odhad = (tv.odhad_text ?? '').trim()
-  const depositPct = (tv.zaloha_objednavka_procent ?? '40').trim()
-  const noDeposit = depositPct === '0'
-  // záloha s DPH (jen pro plátce DPH), zaokrouhleno na haléře
-  const depositNum = Number(depositPct.replace(',', '.'))
-  const depositWithVatRaw = Number.isFinite(depositNum) ? Math.round(pricing.totalWithVat * depositNum) / 100 : 0
-  const depositWithVat = formatCzNumber(depositWithVatRaw, Number.isInteger(depositWithVatRaw) ? 0 : 2)
+  const payment = orderPaymentLines(doc, client, companyProfile, zalohaCastka)
 
   return (
     <Page size="A4" style={styles.page}>
@@ -426,39 +376,13 @@ export default function OrderPage({
       <View style={styles.priceSection} wrap={false}>
         <View style={styles.priceBox}>
           <Text style={styles.priceTitle}>Cena a platba</Text>
-          {rezim === 'pevna' && (
-            <Text style={styles.priceLine}>
-              Pevná cena: {fmt(pricing.totalWithoutVat)}
-              {showVat ? ` bez DPH (${fmt(pricing.totalWithVat)} s DPH)` : ''}
+          {payment.price.map((line, i) => (
+            <Text key={i} style={styles.priceLine}>
+              {line.text}
+              {line.missing ? <Missing>{line.missing}</Missing> : null}
             </Text>
-          )}
-          {rezim === 'hodinova' && (
-            <>
-              <Text style={styles.priceLine}>
-                Cena podle odpracovaného času. Hodinová sazba:{' '}
-                {rateText ? `${rateText} Kč bez DPH.` : <Missing>[DOPLNIT]</Missing>}
-              </Text>
-              {odhad !== '' && (
-                <Text style={styles.priceLine}>Orientační odhad: {odhad} (nezávazný)</Text>
-              )}
-            </>
-          )}
-          {rezim === 'bez_ceny' && (
-            <Text style={styles.priceLine}>
-              Cena se určí z odpracovaného času podle hodinové sazby, kterou dodavatel sdělí e-mailem před
-              zahájením prací.
-            </Text>
-          )}
-          {noDeposit ? (
-            <Text style={styles.priceLine}>Bez zálohy.</Text>
-          ) : rezim === 'pevna' ? (
-            <Text style={styles.priceLine}>
-              Záloha: {depositPct} % z ceny, tedy {zalohaCastka ?? ''} Kč
-              {showVat ? ` bez DPH (${depositWithVat} Kč s DPH)` : ''}, splatná do 7 dnů od doručení zálohové faktury.
-            </Text>
-          ) : (
-            <Text style={styles.priceLine}>Záloha: {depositPct} % z výsledné ceny.</Text>
-          )}
+          ))}
+          <Text style={styles.priceLine}>{payment.deposit.text}</Text>
         </View>
       </View>
 

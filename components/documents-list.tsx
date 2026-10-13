@@ -9,6 +9,7 @@ import { orderPriceLabel } from '@/lib/order-terms'
 import { formatCurrency, formatDate, monthLabel, STATUS_LABELS, STATUS_COLORS, getDisplayStatus } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
 import MonthNav from '@/components/month-nav'
+import DeleteConfirmModal from '@/components/delete-confirm-modal'
 
 type EntityFilter = 'all' | string
 
@@ -51,6 +52,7 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
   const [paymentDoc, setPaymentDoc] = useState<Document | null>(null)
   const [paymentInput, setPaymentInput] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
   const supabase = createClient()
   const router = useRouter()
   const { role, workspaceId } = useUserRole()
@@ -138,12 +140,20 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
     }
   }
 
-  const deleteDoc = async (id: string) => {
-    const target = documents.find((d) => d.id === id)
-    if (target && target.type === 'objednavka' && target.status === 'confirmed') return
-    if (!confirm('Smazat dokument? Tato akce je nevratná.')) return
+  const removeDoc = async (id: string) => {
     await supabase.from('documents').delete().eq('id', id)
     loadDocs()
+  }
+
+  const deleteDoc = async (id: string) => {
+    const target = documents.find((d) => d.id === id)
+    if (target && target.type === 'objednavka' && target.status === 'confirmed') {
+      setDeleteTarget(target)
+      return
+    }
+    const sentNote = target && target.type === 'objednavka' && target.status === 'sent' ? ' Odkaz k potvrzení přestane platit.' : ''
+    if (!confirm(`Smazat dokument? Tato akce je nevratná.${sentNote}`)) return
+    await removeDoc(id)
   }
 
   const downloadPdf = async (doc: Document) => {
@@ -326,7 +336,6 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                         </button>
                         <button
                           onClick={() => deleteDoc(doc.id)}
-                          hidden={doc.type === 'objednavka' && doc.status === 'confirmed'}
                           className="py-1.5 px-2 border border-gray-200 rounded-lg text-xs font-medium text-red-400 hover:bg-red-50 transition-colors"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -492,7 +501,6 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                         {/* Delete */}
                         <button
                           onClick={() => deleteDoc(doc.id)}
-                          hidden={doc.type === 'objednavka' && doc.status === 'confirmed'}
                           className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded"
                           title="Smazat"
                         >
@@ -511,6 +519,18 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
           </>
         )}
       </div>
+      {deleteTarget && (
+        <DeleteConfirmModal
+          title={`Smazat objednávku ${deleteTarget.number}?`}
+          description="Smazáním přijdete o doklad o potvrzení klienta (jméno, funkce, čas a znění podmínek). Doporučujeme si předtím stáhnout PDF."
+          pdfHref={`/api/pdf?id=${encodeURIComponent(deleteTarget.id)}`}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={async () => {
+            await removeDoc(deleteTarget.id)
+            setDeleteTarget(null)
+          }}
+        />
+      )}
       {/* Payment modal */}
       {paymentDoc && (() => {
         const total = paymentDoc.amount_czk ?? paymentDoc.total_with_vat ?? 0
