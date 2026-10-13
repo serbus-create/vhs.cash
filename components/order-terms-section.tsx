@@ -1,6 +1,6 @@
 'use client'
 
-import { defaultDeposit, isPriced, type CenaRezim, type OrderTermsState } from '@/lib/order-terms'
+import { isDepositPercent, isPriced, type CenaRezim, type OrderTermsState } from '@/lib/order-terms'
 
 const RADIOS: { value: CenaRezim; label: string }[] = [
   { value: 'pevna', label: 'Pevná cena' },
@@ -33,10 +33,8 @@ export default function OrderTermsSection({
       )
       if (!ok) return
     }
-    set({
-      cenaRezim: r,
-      ...(value.zalohaEdited ? {} : { zaloha: String(defaultDeposit(r)) }),
-    })
+    // hodnoty záloh se nemění, zobrazí se jen ta, která patří k novému způsobu ceny
+    set({ cenaRezim: r })
   }
 
   return (
@@ -89,35 +87,47 @@ export default function OrderTermsSection({
           )}
         </div>
 
+        {value.cenaRezim === 'hodinova' && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">
+              Hodinová sazba
+              <span className="ml-1.5 text-gray-400 font-normal normal-case">Kč bez DPH, povinná při vytvoření</span>
+            </label>
+            <input
+              inputMode="decimal"
+              value={value.hodinovaSazba}
+              onChange={(e) => set({ hodinovaSazba: e.target.value })}
+              disabled={disabled}
+              placeholder="900"
+              className={inputCls(disabled)}
+            />
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">
-            Hodinová sazba
-            <span className="ml-1.5 text-gray-400 font-normal normal-case">Kč bez DPH, povinná při vytvoření</span>
+            {isDepositPercent(value.cenaRezim) ? 'Záloha, % z ceny (0 = bez zálohy)' : 'Záloha, Kč bez DPH (0 = bez zálohy)'}
           </label>
-          <input
-            inputMode="decimal"
-            value={value.hodinovaSazba}
-            onChange={(e) => set({ hodinovaSazba: e.target.value })}
-            disabled={disabled}
-            placeholder="900"
-            className={inputCls(disabled)}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1.5">
-            Záloha
-            <span className="ml-1.5 text-gray-400 font-normal normal-case">% (0 = bez zálohy)</span>
-          </label>
-          <input
-            type="number" min="0" max="100" step="1"
-            value={value.zaloha}
-            onChange={(e) => set({ zaloha: e.target.value, zalohaEdited: true })}
-            disabled={disabled}
-            className={inputCls(disabled)}
-          />
+          {isDepositPercent(value.cenaRezim) ? (
+            <input
+              type="number" min="0" max="100" step="1"
+              value={value.zalohaProcent}
+              onChange={(e) => set({ zalohaProcent: e.target.value })}
+              disabled={disabled}
+              className={inputCls(disabled)}
+            />
+          ) : (
+            <input
+              inputMode="decimal"
+              value={value.zalohaCastka}
+              onChange={(e) => set({ zalohaCastka: e.target.value })}
+              disabled={disabled}
+              placeholder="0"
+              className={inputCls(disabled)}
+            />
+          )}
         </div>
 
-        {!isPriced(value.cenaRezim) && (
+        {value.cenaRezim === 'hodinova' && (
           <div className="sm:col-span-2">
             <label className="block text-xs font-medium text-gray-600 mb-1.5">
               Orientační odhad
