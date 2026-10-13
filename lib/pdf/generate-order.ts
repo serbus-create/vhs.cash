@@ -2,10 +2,11 @@ import { Document, Font, renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
 import path from 'path'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { StampData } from '@/components/pdf/confirmation-stamp'
 import OrderPage, { asCenaRezim, orderPricing } from '@/components/pdf/order-pages'
 import { TermsPagesBody } from '@/components/pdf/terms-pages'
 import { buildPartyIdentification, type PartyInput } from '@/lib/terms/parties'
-import { extractVariables, formatCzNumber, renderTerms } from '@/lib/terms/render'
+import { extractVariables, formatCzNumber, renderTerms, type RenderResult } from '@/lib/terms/render'
 import type { TermsValues } from '@/lib/terms/defaults'
 import type { DocumentWithItems, Client, CompanyProfile } from '@/lib/types'
 
@@ -58,7 +59,16 @@ export async function loadOrderPdfInput(
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-export async function generateOrderPdf(input: OrderPdfInput): Promise<OrderPdfResult> {
+export interface OrderTermsBuild {
+  result: RenderResult
+  missing: string[]
+  /** hodnoty vstupující do šablony (bez identifikace stran) */
+  values: TermsValues
+  zalohaCastka: string
+}
+
+/** Sestaví podmínky objednávky ze šablony. Sdílí PDF i snapshot při vytvoření odkazu. */
+export function buildOrderTerms(input: OrderPdfInput): OrderTermsBuild {
   const { doc, client, companyProfile } = input
   const tv = doc.terms_values ?? {}
   const rezim = asCenaRezim(tv.cena_rezim)
@@ -123,14 +133,54 @@ export async function generateOrderPdf(input: OrderPdfInput): Promise<OrderPdfRe
   if (!(client?.entity_type ?? '').trim()) missing.push('klient.entity_type')
   if (rezim === 'hodinova' && !(tv.hodinova_sazba ?? '').trim()) missing.push('hodinova_sazba')
 
+  return { result, missing: Array.from(new Set(missing)), values, zalohaCastka }
+}
+
+const SNAPSHOT_STATUSES = new Set(['sent', 'confirmed', 'expired'])
+
+/** Platný snapshot podmínek (JSON ve tvaru RenderResult) nebo null. */
+function parseSnapshot(raw: string | null | undefined): RenderResult | null {
+  if (!raw) return null
+  try {
+    const r = JSON.parse(raw)
+    if (
+      r && typeof r.title === 'string' && Array.isArray(r.articles) &&
+      r.articles.every(
+        (a: any) => a && typeof a.title === 'string' && Array.isArray(a.clauses) &&
+          a.clauses.every((c: any) => c && typeof c.id === 'string' && typeof c.text === 'string'),
+      )
+    ) return r as RenderResult
+  } catch {}
+  return null
+}
+
+export async function generateOrderPdf(input: OrderPdfInput): Promise<OrderPdfResult> {
+  const { doc, client, companyProfile } = input
+  const built = buildOrderTerms(input)
+  const { missing, zalohaCastka } = built
+
+  // Odeslané objednávky se podmínky berou ze snapshotu, ne znovu ze šablony
+  const snapshot = SNAPSHOT_STATUSES.has(doc.status) ? parseSnapshot(doc.terms_snapshot) : null
+  const result = snapshot ?? built.result
+
+  const stamp: StampData | null = doc.confirmed_at
+    ? {
+        signer: `${doc.confirmed_by_name ?? ''}, ${doc.confirmed_by_role ?? ''}`,
+        email: doc.confirmed_by_email ?? '',
+        confirmedAt: doc.confirmed_at,
+        documentLabel: `Objednávka ${doc.number}`,
+        fingerprint: doc.terms_hash ?? undefined,
+      }
+    : null
+
   const pdf: Buffer = await renderToBuffer(
     React.createElement(
       Document,
       { title: `Objednávka ${doc.number}` },
-      React.createElement(OrderPage, { doc, client, companyProfile, zalohaCastka }),
+      React.createElement(OrderPage, { doc, client, companyProfile, zalohaCastka, stamp }),
       React.createElement(TermsPagesBody, { result, showConfirmation: false }),
     ) as unknown as React.ReactElement,
   )
 
-  return { pdf, missing: Array.from(new Set(missing)) }
+  return { pdf, missing }
 }

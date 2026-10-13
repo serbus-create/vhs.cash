@@ -80,6 +80,13 @@ export default function EditDocumentPage() {
 
   const { role, workspaceId } = useUserRole()
   const isReadOnly = role === 'accountant'
+  // Odeslaná, potvrzená a vypršelá objednávka je zamčená (stav mění jen Podpisovna)
+  const lockedOrder = docType === 'objednavka' && ['sent', 'confirmed', 'expired'].includes(status)
+  const statusOptions = lockedOrder
+    ? [{ value: status, label: STATUS_LABELS[status] ?? status }]
+    : docType === 'objednavka'
+      ? STATUS_OPTIONS.filter((o) => o.value !== 'sent' && o.value !== 'paid')
+      : STATUS_OPTIONS
 
   useEffect(() => {
     if (!workspaceId) return
@@ -152,6 +159,7 @@ export default function EditDocumentPage() {
   }
 
   const handleUpdate = async () => {
+    if (lockedOrder) return
     if (!number.trim()) { setError('Číslo dokumentu je povinné'); return }
     if (items.some((i) => !i.description.trim())) { setError('Každá položka musí mít popis'); return }
     if (isOrder) {
@@ -337,7 +345,16 @@ export default function EditDocumentPage() {
         </div>
       )}
 
+      {lockedOrder && (
+        <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm px-4 py-3 rounded-lg">
+          {status === 'sent' && 'Objednávka je odeslaná klientovi k potvrzení a nejde upravit. Pro úpravy zrušte odeslání v Podpisovně.'}
+          {status === 'confirmed' && 'Objednávka je potvrzená a nejde upravit.'}
+          {status === 'expired' && 'Odkaz k potvrzení vypršel. Vytvořte nový v Podpisovně.'}
+        </div>
+      )}
+
       <div className="space-y-6">
+        <fieldset disabled={lockedOrder} className="space-y-6 min-w-0 m-0 p-0 border-0">
         {/* Basic info */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <h2 className="text-sm font-semibold text-[#111111] mb-4 uppercase tracking-wide">Základní informace</h2>
@@ -363,7 +380,7 @@ export default function EditDocumentPage() {
                 onChange={(e) => setStatus(e.target.value as DocumentStatus)}
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
               >
-                {STATUS_OPTIONS.map((s) => (
+                {statusOptions.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
@@ -508,7 +525,7 @@ export default function EditDocumentPage() {
             onChange={setOrderTerms}
             hasClient={!!clientId}
             hasPricedData={items.some((i) => i.unitPrice > 0 || i.discountPercent > 0) || docDiscountPercent > 0}
-            disabled={isReadOnly}
+            disabled={isReadOnly || lockedOrder}
           />
         )}
 
@@ -674,6 +691,8 @@ export default function EditDocumentPage() {
         </div>
         )}
 
+        </fieldset>
+
         {error && (
           <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg">{error}</div>
         )}
@@ -696,7 +715,7 @@ export default function EditDocumentPage() {
           </button>
           <button
             onClick={handleUpdate}
-            disabled={saving}
+            disabled={saving || lockedOrder}
             className="px-5 py-2.5 bg-[#F04E12] text-white rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-60"
           >
             {saving ? 'Ukládám…' : 'Uložit změny'}

@@ -16,8 +16,13 @@ type EntityFilter = 'all' | string
 // U objednávky nedávají smysl paid/overdue a confirmed/expired nastavuje jen systém.
 const STATUS_OPTIONS_BY_TYPE: Record<'faktura' | 'objednavka', DocumentStatus[]> = {
   faktura: ['draft', 'issued', 'sent', 'paid', 'overdue', 'cancelled'],
-  objednavka: ['draft', 'issued', 'sent', 'cancelled'],
+  // Odeslání a potvrzení řeší Podpisovna (odkaz, snapshot), ručně se 'sent' nenabízí
+  objednavka: ['draft', 'issued', 'cancelled'],
 }
+
+// Odeslaná, potvrzená a vypršelá objednávka je zamčená; stav se mění jen přes Podpisovnu
+const isLockedOrder = (doc: { type: string; status: string }) =>
+  doc.type === 'objednavka' && ['sent', 'confirmed', 'expired'].includes(doc.status)
 
 const COPY = {
   faktura: { title: 'Faktury', count: ['faktura', 'faktury', 'faktur'], empty: 'Žádné faktury', first: 'Vytvořte první fakturu.', newLabel: 'Nová faktura' },
@@ -134,6 +139,8 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
   }
 
   const deleteDoc = async (id: string) => {
+    const target = documents.find((d) => d.id === id)
+    if (target && target.type === 'objednavka' && target.status === 'confirmed') return
     if (!confirm('Smazat dokument? Tato akce je nevratná.')) return
     await supabase.from('documents').delete().eq('id', id)
     loadDocs()
@@ -319,6 +326,7 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                         </button>
                         <button
                           onClick={() => deleteDoc(doc.id)}
+                          hidden={doc.type === 'objednavka' && doc.status === 'confirmed'}
                           className="py-1.5 px-2 border border-gray-200 rounded-lg text-xs font-medium text-red-400 hover:bg-red-50 transition-colors"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -386,7 +394,9 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                               setOpenStatusId(doc.id)
                             }
                           }}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer ${STATUS_COLORS[getDisplayStatus(doc.status, doc.due_date)] ?? 'bg-gray-100 text-gray-600'}`}
+                          disabled={isLockedOrder(doc)}
+                          title={isLockedOrder(doc) ? 'Stav se mění v Podpisovně' : undefined}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer disabled:cursor-default ${STATUS_COLORS[getDisplayStatus(doc.status, doc.due_date)] ?? 'bg-gray-100 text-gray-600'}`}
                         >
                           {STATUS_LABELS[getDisplayStatus(doc.status, doc.due_date)] ?? doc.status}
                           <svg className="w-2.5 h-2.5 opacity-60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -482,6 +492,7 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                         {/* Delete */}
                         <button
                           onClick={() => deleteDoc(doc.id)}
+                          hidden={doc.type === 'objednavka' && doc.status === 'confirmed'}
                           className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded"
                           title="Smazat"
                         >

@@ -85,6 +85,7 @@ export interface Document {
   confirmed_by_name?: string | null
   confirmed_by_role?: string | null
   confirmed_by_email?: string | null
+  confirmed_by_phone?: string | null
   confirmed_ip?: string | null
   created_at: string
   clients?: Client | null

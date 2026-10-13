@@ -4,7 +4,7 @@ import type { DocumentWithItems, Client, CompanyProfile } from '@/lib/types'
 import { formatCzNumber } from '@/lib/terms/render'
 import { formatZip } from '@/lib/terms/parties'
 import SupplierSignatures from './supplier-signatures'
-import ConfirmationStamp from './confirmation-stamp'
+import ConfirmationStamp, { type StampData } from './confirmation-stamp'
 
 const ORANGE = '#F04E12'
 const DARK = '#111111'
@@ -227,12 +227,15 @@ export default function OrderPage({
   client,
   companyProfile,
   zalohaCastka,
+  stamp,
 }: {
   doc: DocumentWithItems
   client: Client | null
   companyProfile: CompanyProfile | null
   /** částka zálohy bez DPH (jen u pevné ceny), už zformátovaná */
   zalohaCastka?: string
+  /** data potvrzení klientem; bez nich čárkovaný rámeček "Čeká na potvrzení" */
+  stamp?: StampData | null
 }) {
   const tv = doc.terms_values ?? {}
   const rezim = asCenaRezim(tv.cena_rezim)
@@ -464,7 +467,7 @@ export default function OrderPage({
         <SupplierSignatures supplier={{ name: supplierName, profile_type: companyProfile?.profile_type }} />
         <View style={styles.signClient}>
           <Text style={styles.signClientLabel}>Za klienta{client?.name ? `: ${client.name}` : ''}</Text>
-          <ConfirmationStamp />
+          <ConfirmationStamp data={stamp} />
         </View>
       </View>
 
