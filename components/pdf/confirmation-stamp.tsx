@@ -1,27 +1,24 @@
 import React from 'react'
-import { Image, StyleSheet, Text, View } from '@react-pdf/renderer'
-import { LOGO_VHS } from './branding'
+import { StyleSheet, Text, View } from '@react-pdf/renderer'
 
-const ORANGE = '#F04E12'
-const DARK = '#111111'
+// Potvrzení klienta: modrofialový "úřední" rámeček bez loga (logo vhs. patří dodavateli).
+const INDIGO = '#3F3A8F'
+const INDIGO_BG = '#F6F6FC'
 
 const styles = StyleSheet.create({
   box: {
-    flexDirection: 'row',
-    alignItems: 'center',
     alignSelf: 'flex-start',
     width: 250,
-    padding: 8,
+    padding: 10,
     borderWidth: 1.4,
-    borderColor: ORANGE,
+    borderColor: INDIGO,
     borderRadius: 6,
+    backgroundColor: INDIGO_BG,
   },
-  logo: { width: 42, height: 42 },
-  textCol: { marginLeft: 10, flexGrow: 1 },
-  label: { fontFamily: 'DejaVu-Bold', fontSize: 8, color: ORANGE, letterSpacing: 0.5, marginBottom: 3 },
-  main: { fontFamily: 'DejaVu-Bold', fontSize: 8.5, color: DARK, marginBottom: 1.5 },
+  label: { fontFamily: 'DejaVu-Bold', fontSize: 8, color: INDIGO, letterSpacing: 0.5, marginBottom: 4 },
+  main: { fontFamily: 'DejaVu-Bold', fontSize: 8.5, color: '#111111', marginBottom: 2 },
   line: { fontSize: 7.5, color: '#444444', marginBottom: 1 },
-  small: { fontSize: 6.5, color: '#888888', marginTop: 2 },
+  small: { fontSize: 6.5, color: '#777777', marginTop: 3 },
   pendingBox: {
     alignSelf: 'flex-start',
     width: 250,
@@ -54,7 +51,7 @@ function formatDateTime(value: Date | string): string {
   }).format(date)
 }
 
-/** Razítko potvrzení. Bez dat se ukáže čárkovaný rámeček "Čeká na potvrzení". */
+/** Potvrzení klienta. Bez dat se ukáže čárkovaný rámeček "Čeká na potvrzení klientem". */
 export default function ConfirmationStamp({ data }: { data?: StampData | null }) {
   if (!data) {
     return (
@@ -65,17 +62,14 @@ export default function ConfirmationStamp({ data }: { data?: StampData | null })
   }
   return (
     <View style={styles.box}>
-      <Image src={LOGO_VHS} style={styles.logo} />
-      <View style={styles.textCol}>
-        <Text style={styles.label}>POTVRZENO ELEKTRONICKY</Text>
-        <Text style={styles.main}>{data.signer}</Text>
-        <Text style={styles.line}>{formatDateTime(data.confirmedAt)}</Text>
-        <Text style={styles.line}>{data.email}</Text>
-        <Text style={styles.line}>{data.documentLabel}</Text>
-        {data.fingerprint ? (
-          <Text style={styles.small}>Kontrolní otisk {data.fingerprint.slice(0, 8).toUpperCase()}</Text>
-        ) : null}
-      </View>
+      <Text style={styles.label}>POTVRZENO ELEKTRONICKY</Text>
+      <Text style={styles.main}>{data.signer}</Text>
+      <Text style={styles.line}>{formatDateTime(data.confirmedAt)}</Text>
+      <Text style={styles.line}>{data.email}</Text>
+      <Text style={styles.line}>{data.documentLabel}</Text>
+      {data.fingerprint ? (
+        <Text style={styles.small}>Kontrolní otisk {data.fingerprint.slice(0, 8).toUpperCase()}</Text>
+      ) : null}
     </View>
   )
 }
