@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { generateInvoicePdf } from '@/lib/pdf/generate';
+import { generateOrderPdf, loadOrderPdfInput } from '@/lib/pdf/generate-order';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,15 +40,23 @@ export async function GET(request: Request) {
 
   try {
     console.log('[pdf] generating for document', id, 'user', user.id);
-    const buffer = await generateInvoicePdf(supabase, id);
-    console.log('[pdf] rendered successfully, size:', buffer.length);
-
-    // Fetch doc number for filename
+    // Typ dokumentu (přes RLS jako dosud); nenalezený dokument vyhodí chybu v generátoru níže.
     const { data: doc } = await supabase
       .from('documents')
       .select('number, type')
       .eq('id', id)
       .single();
+
+    let buffer: Buffer;
+    const extraHeaders: Record<string, string> = {};
+    if (doc?.type === 'objednavka') {
+      const { pdf, missing } = await generateOrderPdf(await loadOrderPdfInput(supabase, id));
+      buffer = pdf;
+      if (missing.length > 0) extraHeaders['X-Terms-Missing'] = missing.join(',');
+    } else {
+      buffer = await generateInvoicePdf(supabase, id);
+    }
+    console.log('[pdf] rendered successfully, size:', buffer.length);
 
     const typeLabel = doc?.type === 'faktura' ? 'Faktura' : doc?.type === 'nabidka' ? 'Nabidka' : 'Objednavka';
     const filename = `${typeLabel}-${(doc?.number ?? id).replace(/[^a-zA-Z0-9-]/g, '_')}.pdf`;
@@ -59,12 +68,16 @@ export async function GET(request: Request) {
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': String(buffer.length),
         'Cache-Control': 'no-store',
+        ...extraHeaders,
       },
     });
   } catch (err) {
     console.error('[pdf] render error:', err);
     return NextResponse.json(
-      { error: 'PDF generation failed', detail: String(err) },
+      {
+        error: 'PDF generation failed',
+        detail: err instanceof Error ? err.message : String(err),
+      },
       { status: 500 }
     );
   }

@@ -2,7 +2,6 @@ import React from 'react'
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { RenderResult } from '@/lib/terms/render'
 import { MISSING_PLACEHOLDER } from '@/lib/terms/render'
-import { TERMS_TEMPLATE_VERSION } from '@/lib/terms/template'
 
 const ORANGE = '#F04E12'
 const DARK = '#111111'
@@ -30,8 +29,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: ORANGE,
     paddingLeft: 10,
+    marginBottom: 14,
   },
-  version: { fontSize: 9, color: '#666666', marginTop: 4, marginBottom: 14, paddingLeft: 13 },
   articleHeading: {
     fontFamily: 'DejaVu-Bold',
     fontSize: 11,
@@ -88,19 +87,24 @@ function ClauseText({ text }: { text: string }) {
   )
 }
 
-export default function TermsPages({
+/**
+ * Jen <Page> s podmínkami, bez <Document>. Použije ho i objednávka, kde jsou podmínky
+ * za stranou objednávky v jednom dokumentu. "Strana X z Y" se počítá přes celý Document.
+ * showConfirmation = false vynechá blok "Potvrzení klientem" (potvrzení je na straně objednávky).
+ */
+export function TermsPagesBody({
   result,
   confirmation,
+  showConfirmation = true,
 }: {
   result: RenderResult
   confirmation?: TermsConfirmation | null
+  showConfirmation?: boolean
 }) {
-  const footerLabel = `Podmínky spolupráce, verze ${TERMS_TEMPLATE_VERSION}`
+  const footerLabel = 'Podmínky spolupráce'
   return (
-    <Document title={result.title}>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>{result.title}</Text>
-        <Text style={styles.version}>Verze {TERMS_TEMPLATE_VERSION}</Text>
 
         {result.articles.map((article) => {
           const [first, ...rest] = article.clauses
@@ -126,23 +130,38 @@ export default function TermsPages({
           )
         })}
 
-        <View style={styles.confirmBox} wrap={false}>
-          <Text style={styles.articleHeading}>Potvrzení klientem</Text>
-          {confirmation ? (
-            <Text style={styles.clause}>
-              Potvrzeno elektronicky: {confirmation.name}, {confirmation.email},{' '}
-              {formatDateTime(confirmation.confirmedAt)}.
-            </Text>
-          ) : (
-            <Text style={styles.clause}>Čeká na potvrzení klientem.</Text>
-          )}
-        </View>
+        {showConfirmation && (
+          <View style={styles.confirmBox} wrap={false}>
+            <Text style={styles.articleHeading}>Potvrzení klientem</Text>
+            {confirmation ? (
+              <Text style={styles.clause}>
+                Potvrzeno elektronicky: {confirmation.name}, {confirmation.email},{' '}
+                {formatDateTime(confirmation.confirmedAt)}.
+              </Text>
+            ) : (
+              <Text style={styles.clause}>Čeká na potvrzení klientem.</Text>
+            )}
+          </View>
+        )}
 
         <View style={styles.footer} fixed>
           <Text>{footerLabel}</Text>
           <Text render={({ pageNumber, totalPages }) => `Strana ${pageNumber} z ${totalPages}`} />
         </View>
       </Page>
+  )
+}
+
+export default function TermsPages({
+  result,
+  confirmation,
+}: {
+  result: RenderResult
+  confirmation?: TermsConfirmation | null
+}) {
+  return (
+    <Document title={result.title}>
+      <TermsPagesBody result={result} confirmation={confirmation} />
     </Document>
   )
 }

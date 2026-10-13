@@ -122,3 +122,24 @@ export function orderPriceLabel(doc: {
   if (r === 'bez_ceny') return 'Bez ceny'
   return null
 }
+
+const PARTY_FIELD_LABELS: Record<string, string> = {
+  name: 'název',
+  address: 'adresa',
+  ico: 'IČO',
+  spisova_znacka: 'spisová značka',
+  represented_by: 'zástupce firmy',
+}
+
+/** Čitelný název chybějícího údaje z hlavičky X-Terms-Missing, např. "dodavatel.ico" -> "IČO dodavatele". */
+export function missingLabel(key: string): string {
+  if (key === 'hodinova_sazba') return 'hodinová sazba'
+  const [party, field] = key.split('.')
+  if ((party === 'dodavatel' || party === 'klient') && field) {
+    const label = PARTY_FIELD_LABELS[field] ?? field
+    const owner = party === 'dodavatel' ? 'dodavatele' : 'klienta'
+    // "adresa klienta", "IČO dodavatele"; samotný "zástupce firmy" doplníme o stranu
+    return field === 'represented_by' ? `${label} (${party === 'dodavatel' ? 'dodavatel' : 'klient'})` : `${label} ${owner}`
+  }
+  return key
+}

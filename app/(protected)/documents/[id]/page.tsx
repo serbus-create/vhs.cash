@@ -7,7 +7,7 @@ import type { Client, CompanyProfile, DocumentItem, DocumentStatus, DocumentType
 import { formatCurrency, TYPE_LABELS, STATUS_LABELS, calcDocumentTotals } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
 import OrderTermsSection from '@/components/order-terms-section'
-import { initialOrderTerms, parseOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload } from '@/lib/order-terms'
+import { initialOrderTerms, parseOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload, missingLabel } from '@/lib/order-terms'
 
 interface LineItem {
   id: string
@@ -71,6 +71,7 @@ export default function EditDocumentPage() {
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
   const [pdfError, setPdfError] = useState('')
+  const [pdfMissing, setPdfMissing] = useState<string[]>([])
   const [saved, setSaved] = useState(false)
 
   // Derive profile type for DUZP field visibility
@@ -243,12 +244,15 @@ export default function EditDocumentPage() {
   const handleDownloadPdf = async () => {
     setDownloading(true)
     setPdfError('')
+    setPdfMissing([])
     try {
       const res = await fetch(`/api/pdf?id=${docId}`)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.detail ?? body.error ?? `HTTP ${res.status}`)
       }
+      const missingHeader = res.headers.get('X-Terms-Missing')
+      if (missingHeader) setPdfMissing(missingHeader.split(',').filter(Boolean))
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -323,6 +327,13 @@ export default function EditDocumentPage() {
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg flex items-start justify-between gap-3">
           <span><strong>Chyba PDF:</strong> {pdfError}</span>
           <button onClick={() => setPdfError('')} className="shrink-0 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+
+      {pdfMissing.length > 0 && (
+        <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm px-4 py-3 rounded-lg flex items-start justify-between gap-3">
+          <span><strong>V PDF chybí údaje:</strong> {pdfMissing.map(missingLabel).join(', ')}</span>
+          <button onClick={() => setPdfMissing([])} className="shrink-0 text-yellow-500 hover:text-yellow-700">✕</button>
         </div>
       )}
 
