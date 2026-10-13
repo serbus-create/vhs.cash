@@ -5,6 +5,7 @@ import { loadOrderPdfInput } from '@/lib/pdf/generate-order'
 import { orderPaymentLines, orderDepositAmountText, orderPricing } from '@/lib/order-summary'
 import { parseSnapshot } from '@/lib/terms/snapshot'
 import ConfirmForm from './confirm-form'
+import ThankYou from './thank-you'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
@@ -21,8 +22,6 @@ const fmtDate = (d: string | null | undefined) => {
   const [y, m, day] = d.split('-')
   return `${day}.${m}.${y}`
 }
-const fmtDateTime = (v: string | null | undefined) =>
-  v ? new Intl.DateTimeFormat('cs-CZ', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Prague' }).format(new Date(v)) : '—'
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -81,21 +80,11 @@ export default async function PotvrzeniPage({ params }: { params: { token: strin
   if (confirmed) {
     return (
       <Shell>
-        <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
-          <h1 className="text-xl font-bold text-[#111111] mb-1">Děkujeme, objednávka je potvrzená</h1>
-          <p className="text-sm text-gray-500 mb-4">Objednávka č. {doc.number}</p>
-          <dl>
-            <Row label="Potvrdil(a)">{doc.confirmed_by_name}</Row>
-            <Row label="Funkce">{doc.confirmed_by_role}</Row>
-            <Row label="Čas potvrzení">{fmtDateTime(doc.confirmed_at)}</Row>
-          </dl>
-          <a
-            href={`/api/potvrzeni/${encodeURIComponent(token)}/pdf`}
-            className="mt-5 inline-block w-full sm:w-auto text-center px-5 py-3 rounded-lg text-base font-semibold bg-[#F04E12] text-white hover:bg-[#d9430f]"
-          >
-            Stáhnout PDF
-          </a>
-        </div>
+        <ThankYou
+          number={doc.number}
+          token={token}
+          details={{ name: doc.confirmed_by_name, role: doc.confirmed_by_role, confirmedAt: doc.confirmed_at }}
+        />
       </Shell>
     )
   }
@@ -174,6 +163,7 @@ export default async function PotvrzeniPage({ params }: { params: { token: strin
           <h2 className="text-lg font-bold text-[#111111] mb-3">Potvrzení</h2>
           <ConfirmForm
             token={token}
+            number={doc.number}
             initialName={doc.contact_name ?? ''}
             initialEmail={doc.contact_email ?? ''}
             consentLabel={consentText(doc.number)}

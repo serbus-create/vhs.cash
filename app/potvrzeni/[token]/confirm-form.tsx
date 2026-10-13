@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import ThankYou from './thank-you'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_RE = /^[0-9 +()\-]+$/
@@ -11,11 +12,13 @@ const inputCls =
 
 export default function ConfirmForm({
   token,
+  number,
   initialName,
   initialEmail,
   consentLabel,
 }: {
   token: string
+  number: string
   initialName: string
   initialEmail: string
   consentLabel: string
@@ -28,6 +31,12 @@ export default function ConfirmForm({
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current)
+  }, [])
 
   const validate = (): string | null => {
     if (!name.trim()) return 'Vyplňte jméno a příjmení.'
@@ -56,10 +65,12 @@ export default function ConfirmForm({
       })
       const b = await res.json().catch(() => ({}))
       if (res.ok) {
+        setDone(true)
         // archiv a e-maily dokončí server, výsledek klientovi neukazujeme
         fetch(`/api/potvrzeni/${encodeURIComponent(token)}/finalize`, { method: 'POST', keepalive: true }).catch(() => {})
-        router.refresh()
-        return // tlačítko zůstane vypnuté, stránka se obnoví do stavu potvrzeno
+        refreshTimer.current = setTimeout(() => router.refresh(), 1000)
+        setBusy(false)
+        return
       }
       setError(b.error ?? 'Potvrzení se nezdařilo, zkuste to prosím znovu.')
       // 409/410/404 mění stav stránky, obnovíme ji
@@ -69,6 +80,8 @@ export default function ConfirmForm({
     }
     setBusy(false)
   }
+
+  if (done) return <ThankYou number={number} token={token} />
 
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
