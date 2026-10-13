@@ -1,6 +1,7 @@
 // E-mail s objednávkou k potvrzení (šablona). Jen sestavuje obsah, nic neodesílá.
 
 const LOGO_URL = 'https://vhs-cash.vercel.app/vhs-logo-black.png'
+const ORANGE = '#F04E12'
 
 const esc = (s: string): string =>
   s
@@ -21,14 +22,16 @@ export function buildOrderEmail({ docNumber, confirmUrl }: { docNumber: string; 
 
 v příloze posílám objednávku č. ${docNumber} a podmínky spolupráce. Prosím o jejich potvrzení jedním z těchto způsobů:
 
-- Kliknutím na tlačítko níže. Zkontrolujete údaje, doplníte jméno a funkci a potvrdíte. Je to nejrychlejší cesta.
-- Odpovědí na tento e-mail, ve které napíšete „Souhlasím s objednávkou a podmínkami spolupráce“ a uvedete své jméno a funkci.
+1) KLIKNUTÍM NA ODKAZ (doporučujeme)
+Zkontrolujete údaje, doplníte jméno a funkci a potvrdíte. Je to nejrychlejší cesta.
+Zkontrolovat a potvrdit: ${confirmUrl}
+
+2) Odpovědí na tento e-mail
+Napíšete „Souhlasím s objednávkou a podmínkami spolupráce“ a uvedete své jméno a funkci.
 
 Po potvrzení Vám zašlu kopii s potvrzením. Odkaz je platný 30 dnů.
 
 Děkuji a přeji hezký den
-
-Zkontrolovat a potvrdit: ${confirmUrl}
 
 Miloš Serbus
 Produkce | Strategie | Supervize
@@ -39,6 +42,7 @@ info@v-h-s.cz
 
   const num = esc(docNumber)
   const url = esc(confirmUrl)
+  const font = 'font-family:Arial,Helvetica,sans-serif;'
   const p = 'margin:0 0 14px 0;'
 
   const html = `<!DOCTYPE html>
@@ -46,22 +50,43 @@ info@v-h-s.cz
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#ffffff;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
-<tr><td align="left" style="padding:24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111111;">
+<tr><td align="left" style="padding:24px;${font}font-size:15px;line-height:1.5;color:#111111;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;">
-<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111111;">
+<tr><td style="${font}font-size:15px;line-height:1.5;color:#111111;">
 <p style="${p}">Dobrý den,</p>
-<p style="${p}">v příloze posílám objednávku č. ${num} a podmínky spolupráce. Prosím o jejich potvrzení jedním z těchto způsobů:</p>
-<ul style="margin:0 0 14px 0;padding-left:20px;">
-<li style="margin:0 0 8px 0;">Kliknutím na tlačítko níže. Zkontrolujete údaje, doplníte jméno a funkci a potvrdíte. Je to nejrychlejší cesta.</li>
-<li style="margin:0 0 8px 0;">Odpovědí na tento e-mail, ve které napíšete „Souhlasím s objednávkou a podmínkami spolupráce“ a uvedete své jméno a funkci.</li>
-</ul>
-<p style="${p}">Po potvrzení Vám zašlu kopii s potvrzením. Odkaz je platný 30 dnů.</p>
-<p style="${p}">Děkuji a přeji hezký den</p>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px 0;">
-<tr><td align="center" bgcolor="#F04E12" style="background:#F04E12;border-radius:6px;">
-<a href="${url}" target="_blank" style="display:inline-block;padding:12px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">Zkontrolovat a potvrdit</a>
+<p style="${p}">v příloze posílám objednávku č. <strong>${num}</strong> a podmínky spolupráce. Prosím o jejich potvrzení jedním z těchto způsobů:</p>
+
+<!-- Způsob 1: doporučený, výrazný -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px 0;">
+<tr>
+<td width="5" bgcolor="${ORANGE}" style="background:${ORANGE};font-size:0;line-height:0;">&nbsp;</td>
+<td bgcolor="#FFF3EF" style="background:#FFF3EF;padding:16px 18px;${font}font-size:15px;line-height:1.5;color:#111111;">
+<div style="margin:0 0 4px 0;font-size:11px;font-weight:bold;letter-spacing:1px;color:${ORANGE};">DOPORUČUJEME</div>
+<div style="margin:0 0 6px 0;font-size:17px;font-weight:bold;color:#111111;">1. Kliknutím na tlačítko</div>
+<div style="margin:0 0 14px 0;">Zkontrolujete údaje, doplníte jméno a funkci a potvrdíte. <strong>Je to nejrychlejší cesta.</strong></div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr><td align="center" bgcolor="${ORANGE}" style="background:${ORANGE};border-radius:6px;">
+<a href="${url}" target="_blank" style="display:inline-block;padding:13px 28px;${font}font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;">Zkontrolovat a potvrdit</a>
 </td></tr>
 </table>
+</td>
+</tr>
+</table>
+
+<!-- Způsob 2: alternativa, nenápadná -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;">
+<tr>
+<td width="5" bgcolor="#CCCCCC" style="background:#CCCCCC;font-size:0;line-height:0;">&nbsp;</td>
+<td bgcolor="#F6F6F6" style="background:#F6F6F6;padding:12px 18px;${font}font-size:14px;line-height:1.5;color:#444444;">
+<div style="margin:0 0 4px 0;font-size:15px;font-weight:bold;color:#444444;">2. Odpovědí na tento e-mail</div>
+<div style="margin:0;">Napíšete <strong>„Souhlasím s objednávkou a podmínkami spolupráce“</strong> a uvedete své jméno a funkci.</div>
+</td>
+</tr>
+</table>
+
+<p style="${p}">Po potvrzení Vám zašlu kopii s potvrzením. Odkaz je platný 30 dnů.</p>
+<p style="margin:0 0 20px 0;">Děkuji a přeji hezký den</p>
+
 <p style="margin:0;"><strong>Miloš Serbus</strong></p>
 <p style="margin:0;">Produkce | Strategie | Supervize</p>
 <p style="margin:0 0 12px 0;">Jednatel ve společnosti</p>
