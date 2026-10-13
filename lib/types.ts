@@ -17,6 +17,7 @@ export interface CompanyProfile {
   vat_payer: boolean
   profile_type: 'sro' | 'osvč'
   spisova_znacka: string | null
+  represented_by?: string | null
   invoice_number_series: number
   created_at: string
 }
@@ -45,7 +46,7 @@ export interface Client {
   created_at: string
 }
 
-export type DocumentType = 'faktura' | 'nabidka' | 'objednavka'
+export type DocumentType = 'faktura' | 'nabidka' | 'objednavka' | 'podminky'
 export type DocumentStatus = 'draft' | 'issued' | 'sent' | 'paid' | 'overdue' | 'cancelled' | 'confirmed' | 'expired'
 
 export interface Document {

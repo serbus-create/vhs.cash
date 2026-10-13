@@ -33,6 +33,7 @@ export const TYPE_LABELS: Record<string, string> = {
   faktura: 'Faktura',
   nabidka: 'Cenová nabídka',
   objednavka: 'Objednávka',
+  podminky: 'Podmínky spolupráce',
 }
 
 export const STATUS_COLORS: Record<string, string> = {
