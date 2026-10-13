@@ -87,6 +87,12 @@ export interface Document {
   confirmed_by_email?: string | null
   confirmed_by_phone?: string | null
   confirmed_ip?: string | null
+  confirmed_user_agent?: string | null
+  terms_mail_sent_at?: string | null
+  terms_mail_to?: string | null
+  confirm_mail_sent_at?: string | null
+  archive_drive_file_id?: string | null
+  archived_at?: string | null
   created_at: string
   clients?: Client | null
 }

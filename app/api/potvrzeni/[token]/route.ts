@@ -74,6 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         confirmed_by_email: email,
         confirmed_by_phone: phone || null,
         confirmed_ip: clientIp(req),
+        confirmed_user_agent: req.headers.get('user-agent')?.slice(0, 300) || null,
         terms_values: termsValues,
       })
       .eq('confirm_token_hash', hashToken(params.token))

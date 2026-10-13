@@ -46,6 +46,16 @@ function ConfirmedBy({ doc }: { doc: Document }) {
   )
 }
 
+function MailInfo({ doc }: { doc: Document }) {
+  return (
+    <div className="mt-1 text-xs text-gray-500">
+      {doc.terms_mail_sent_at
+        ? `Odesláno e-mailem na ${doc.terms_mail_to}, ${fmtDateTime(doc.terms_mail_sent_at)}`
+        : 'Odkaz předán ručně'}
+    </div>
+  )
+}
+
 function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -64,6 +74,8 @@ export default function PodpisovnaPage() {
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
   const [linkDoc, setLinkDoc] = useState<Document | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [actionOk, setActionOk] = useState<string | null>(null)
+  const [sendingId, setSendingId] = useState<string | null>(null)
 
   const load = () => {
     if (!workspaceId) return
@@ -100,6 +112,38 @@ export default function PodpisovnaPage() {
     load()
   }
 
+  // Odeslání e-mailem: potvrzovací dialog, volání API. Vrací výsledek pro zobrazení v okně nebo v liště.
+  const sendByMail = async (doc: Document): Promise<{ ok: boolean; message: string; cancelled?: boolean }> => {
+    const replacing = doc.status === 'sent' && !isExpiredSent(doc)
+    const text = `Odeslat objednávku ${doc.number} na ${doc.contact_email}? Kopie půjde na info@v-h-s.cz.${replacing ? ' Původní odkaz přestane platit.' : ''}`
+    if (!confirm(text)) return { ok: false, message: '', cancelled: true }
+    setSendingId(doc.id)
+    try {
+      const res = await fetch('/api/podpisovna/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId: doc.id }),
+      })
+      const b = await res.json().catch(() => ({}))
+      if (!res.ok) return { ok: false, message: b.error ?? 'Odeslání se nezdařilo' }
+      return { ok: true, message: `Odesláno na ${b.to}` }
+    } catch {
+      return { ok: false, message: 'Odeslání se nezdařilo' }
+    } finally {
+      setSendingId(null)
+    }
+  }
+
+  const resend = async (doc: Document) => {
+    setActionError(null)
+    setActionOk(null)
+    const r = await sendByMail(doc)
+    if (r.cancelled) return
+    if (r.ok) setActionOk(r.message)
+    else setActionError(r.message)
+    load()
+  }
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {}
     for (const d of documents) c[displayStatus(d)] = (c[displayStatus(d)] ?? 0) + 1
@@ -121,6 +165,16 @@ export default function PodpisovnaPage() {
         {(ds === 'issued' || ds === 'sent') && <PreviewButton doc={doc} />}
         {(ds === 'sent' || ds === 'expired') && (
           <button onClick={() => setLinkDoc(doc)} disabled={!isAdmin} title={adminTitle} className={btnCls(isAdmin)}>Nový odkaz</button>
+        )}
+        {(ds === 'sent' || ds === 'expired') && (
+          <button
+            onClick={() => resend(doc)}
+            disabled={!isAdmin || sendingId === doc.id || !doc.contact_email?.trim() || !doc.contact_name?.trim()}
+            title={adminTitle}
+            className={btnCls(isAdmin && sendingId !== doc.id)}
+          >
+            {sendingId === doc.id ? 'Odesílám…' : 'Poslat znovu e-mailem'}
+          </button>
         )}
         {doc.status === 'sent' && (
           <button onClick={() => revoke(doc)} disabled={!isAdmin} title={adminTitle} className={btnCls(isAdmin)}>Zrušit odeslání</button>
@@ -159,6 +213,9 @@ export default function PodpisovnaPage() {
         <p className="text-gray-500 text-sm mt-1">Objednávky k odeslání a potvrzení</p>
       </div>
 
+      {actionOk && (
+        <div className="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-lg">{actionOk}</div>
+      )}
       {actionError && (
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{actionError}</div>
       )}
@@ -192,6 +249,7 @@ export default function PodpisovnaPage() {
                     <Link href={`/documents/${doc.id}`} className="font-semibold text-[#F04E12] text-sm">{doc.number}</Link>
                     <StatusBadge status={displayStatus(doc)} />
                   </div>
+                  {tab === 'sent' && <MailInfo doc={doc} />}
                   <p className="text-sm font-medium text-[#111111] mb-1">{(doc.clients as any)?.name ?? '—'}</p>
                   {tab === 'confirmed' ? <ConfirmedBy doc={doc} /> : <Contact doc={doc} />}
                   <div className="flex items-center justify-between mt-2">
@@ -226,7 +284,10 @@ export default function PodpisovnaPage() {
                     <td className="px-4 py-3">{tab === 'confirmed' ? <ConfirmedBy doc={doc} /> : <Contact doc={doc} />}</td>
                     <td className="px-4 py-3 text-sm font-bold text-[#111111]">{priceOf(doc)}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{doc.terms_sent_at ? formatDate(doc.terms_sent_at) : '—'}</td>
-                    <td className="px-4 py-3"><StatusBadge status={displayStatus(doc)} /></td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={displayStatus(doc)} />
+                      {tab === 'sent' && <MailInfo doc={doc} />}
+                    </td>
                     <td className="px-4 py-3"><Actions doc={doc} /></td>
                   </tr>
                 ))}
@@ -241,6 +302,8 @@ export default function PodpisovnaPage() {
           doc={previewDoc}
           onClose={() => setPreviewDoc(null)}
           onCreateLink={() => { setLinkDoc(previewDoc); setPreviewDoc(null) }}
+          onSend={sendByMail}
+          onSent={() => { setPreviewDoc(null); load() }}
         />
       )}
       {linkDoc && isAdmin && (
@@ -250,7 +313,31 @@ export default function PodpisovnaPage() {
   )
 }
 
-function PreviewModal({ doc, onClose, onCreateLink }: { doc: Document; onClose: () => void; onCreateLink: () => void }) {
+function PreviewModal({
+  doc,
+  onClose,
+  onCreateLink,
+  onSend,
+  onSent,
+}: {
+  doc: Document
+  onClose: () => void
+  onCreateLink: () => void
+  onSend: (doc: Document) => Promise<{ ok: boolean; message: string; cancelled?: boolean }>
+  onSent: () => void
+}) {
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const sendMail = async () => {
+    setSending(true)
+    setSendResult(null)
+    const r = await onSend(doc)
+    if (r.cancelled) { setSending(false); return }
+    setSendResult(r)
+    if (r.ok) setTimeout(onSent, 1500)
+    else setSending(false)
+  }
   const [checking, setChecking] = useState(false)
   const [missing, setMissing] = useState<string[] | null>(null)
   const [checkError, setCheckError] = useState<string | null>(null)
@@ -342,8 +429,13 @@ function PreviewModal({ doc, onClose, onCreateLink }: { doc: Document; onClose: 
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <button disabled title="Zapne se v dalším kroku" className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-400 cursor-not-allowed">
-            Odeslat e-mailem
+          <button
+            onClick={sendMail}
+            disabled={contactMissing || sending}
+            title={contactMissing ? 'Chybí kontaktní osoba nebo e-mail' : undefined}
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#F04E12] text-white hover:bg-[#d9430f] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {sending && !sendResult ? 'Odesílám…' : 'Odeslat e-mailem'}
           </button>
           <button
             onClick={onCreateLink}
@@ -353,8 +445,12 @@ function PreviewModal({ doc, onClose, onCreateLink }: { doc: Document; onClose: 
           >
             Odeslat sám (odkaz a text)
           </button>
-          <span className="self-center text-xs text-gray-400">Odeslat e-mailem se zapne v dalším kroku</span>
         </div>
+        {sendResult && (
+          <div className={`mt-3 rounded-lg border text-sm p-3 ${sendResult.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+            {sendResult.message}
+          </div>
+        )}
       </div>
     </div>
   )
