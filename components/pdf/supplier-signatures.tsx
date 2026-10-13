@@ -7,17 +7,17 @@ const ORANGE = '#F04E12'
 const styles = StyleSheet.create({
   wrap: { marginTop: 14 },
   company: { fontFamily: 'DejaVu-Bold', fontSize: 9, color: '#111111', marginBottom: 8 },
-  box: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    alignSelf: 'flex-start',
+  row: { flexDirection: 'row', flexWrap: 'wrap' },
+  card: {
+    width: 245,
     padding: 10,
+    marginRight: 12,
+    marginBottom: 8,
     borderWidth: 1.2,
     borderColor: ORANGE,
     borderRadius: 6,
   },
-  logo: { width: 40, height: 40, marginRight: 14, marginTop: 2 },
-  signer: { width: 190 },
+  logo: { position: 'absolute', top: 8, right: 8, width: 26, height: 26 },
   imageBox: { height: 42, justifyContent: 'flex-end' },
   image: { height: 38, objectFit: 'contain', objectPositionX: 0 },
   line: { borderTopWidth: 0.7, borderTopColor: '#666666', marginTop: 2, paddingTop: 3 },
@@ -37,9 +37,12 @@ export interface Signer {
 }
 
 /** Podpisy a kontakty podle jména osoby (malá písmena). */
-const PEOPLE: Record<string, { image: string; email: string; phone: string }> = {
-  'petr janošťák': { image: SIGNATURE_PETR, email: 'janostak@v-h-s.cz', phone: '+420 723 433 405' },
-  'miloš serbus': { image: SIGNATURE_MILOS, email: 'serbus@v-h-s.cz', phone: '+420 725 468 614' },
+// Jedna značka, jeden společný e-mail; telefon je osobní.
+const SUPPLIER_EMAIL = 'info@v-h-s.cz'
+
+const PEOPLE: Record<string, { image: string; phone: string }> = {
+  'petr janošťák': { image: SIGNATURE_PETR, phone: '+420 723 433 405' },
+  'miloš serbus': { image: SIGNATURE_MILOS, phone: '+420 725 468 614' },
 }
 
 const personFor = (name: string) => PEOPLE[name.trim().toLowerCase()]
@@ -63,7 +66,7 @@ export interface SupplierForSignatures {
 export function signersForSupplier(supplier: SupplierForSignatures): Signer[] {
   const make = (name: string, role?: string): Signer => {
     const p = personFor(name)
-    return { name, role, image: p?.image, email: p?.email, phone: p?.phone }
+    return { name, role, image: p?.image, email: SUPPLIER_EMAIL, phone: p?.phone }
   }
   const type = (supplier.profile_type ?? '').toLowerCase()
   if (type === 'sro') {
@@ -79,10 +82,10 @@ export default function SupplierSignatures({ supplier }: { supplier: SupplierFor
     <View style={styles.wrap} wrap={false}>
       <Text style={styles.company}>Za dodavatele: {supplier.name}</Text>
       {signers.length > 0 && (
-        <View style={styles.box}>
-          <Image src={LOGO_VHS} style={styles.logo} />
-          {signers.map((s, i) => (
-            <View key={s.name} style={[styles.signer, i < signers.length - 1 ? { marginRight: 18 } : {}]}>
+        <View style={styles.row}>
+          {signers.map((s) => (
+            <View key={s.name} style={styles.card} wrap={false}>
+              <Image src={LOGO_VHS} style={styles.logo} />
               <View style={styles.imageBox}>{s.image ? <Image src={s.image} style={styles.image} /> : null}</View>
               <View style={styles.line}>
                 <Text style={styles.name}>{s.name}</Text>

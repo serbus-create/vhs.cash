@@ -55,13 +55,13 @@ function formatDateTime(value: Date | string): string {
 export default function ConfirmationStamp({ data }: { data?: StampData | null }) {
   if (!data) {
     return (
-      <View style={styles.pendingBox}>
+      <View style={styles.pendingBox} wrap={false}>
         <Text style={styles.pendingText}>Čeká na potvrzení klientem.</Text>
       </View>
     )
   }
   return (
-    <View style={styles.box}>
+    <View style={styles.box} wrap={false}>
       <Text style={styles.label}>POTVRZENO ELEKTRONICKY</Text>
       <Text style={styles.main}>{data.signer}</Text>
       <Text style={styles.line}>{formatDateTime(data.confirmedAt)}</Text>
