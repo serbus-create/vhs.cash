@@ -545,7 +545,7 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
             onClick={() => setPaymentDoc(null)}
           >
             <div
-              className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-5"
+              className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-5 max-h-[90vh] max-h-[90dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div>

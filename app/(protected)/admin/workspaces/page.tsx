@@ -253,7 +253,7 @@ export default function AdminWorkspacesPage() {
       {/* Create workspace modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-y-auto max-h-[90vh] max-h-[90dvh]">
             <div className="h-1 bg-[#F04E12]" />
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
@@ -302,7 +302,7 @@ export default function AdminWorkspacesPage() {
       {/* Invite user modal */}
       {inviteWorkspaceId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-y-auto max-h-[90vh] max-h-[90dvh]">
             <div className="h-1 bg-[#F04E12]" />
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">

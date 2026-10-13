@@ -330,10 +330,10 @@ export default function ClientsPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="h-1 bg-[#F04E12]" />
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] max-h-[90dvh]">
+            <div className="h-1 bg-[#F04E12] shrink-0" />
+            <div className="flex flex-col min-h-0 flex-1">
+              <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
                 <h2 className="text-lg font-bold text-[#111111]">
                   {editing ? 'Upravit klienta' : 'Přidat klienta'}
                 </h2>
@@ -344,6 +344,7 @@ export default function ClientsPage() {
                 </button>
               </div>
 
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2">
               <div className="space-y-4">
                 {/* Country */}
                 <div>
@@ -455,8 +456,9 @@ export default function ClientsPage() {
               </div>
 
               {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
+              </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-3 px-6 py-4 shrink-0 border-t border-gray-100">
                 <button
                   onClick={() => setShowModal(false)}
                   className="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"

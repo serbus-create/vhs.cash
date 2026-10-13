@@ -36,7 +36,7 @@ export default function DeleteConfirmModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onCancel}>
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 max-h-[90vh] max-h-[90dvh] overflow-y-auto"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
