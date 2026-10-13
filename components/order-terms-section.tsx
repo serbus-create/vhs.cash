@@ -1,6 +1,6 @@
 'use client'
 
-import { isDepositPercent, isPriced, type CenaRezim, type OrderTermsState } from '@/lib/order-terms'
+import { isPriced, type CenaRezim, type OrderTermsState } from '@/lib/order-terms'
 
 const RADIOS: { value: CenaRezim; label: string }[] = [
   { value: 'pevna', label: 'Pevná cena' },
@@ -33,8 +33,8 @@ export default function OrderTermsSection({
       )
       if (!ok) return
     }
-    // hodnoty záloh se nemění, zobrazí se jen ta, která patří k novému způsobu ceny
-    set({ cenaRezim: r })
+    // dokud uživatel zálohu neměnil, hodinová sazba je výchozí bez zálohy; jinak se záloha nemění
+    set({ cenaRezim: r, ...(value.zalohaTouched ? {} : { bezZalohy: r === 'hodinova' }) })
   }
 
   return (
@@ -105,26 +105,29 @@ export default function OrderTermsSection({
         )}
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">
-            {isDepositPercent(value.cenaRezim) ? 'Záloha, % z ceny (0 = bez zálohy)' : 'Záloha, Kč bez DPH (0 = bez zálohy)'}
+            {isPriced(value.cenaRezim)
+              ? 'Záloha, % z ceny (částka se dopočítá z položek)'
+              : 'Záloha, % z výsledné ceny'}
           </label>
-          {isDepositPercent(value.cenaRezim) ? (
+          <div className="flex items-center gap-3">
             <input
               type="number" min="0" max="100" step="1"
               value={value.zalohaProcent}
-              onChange={(e) => set({ zalohaProcent: e.target.value })}
-              disabled={disabled}
-              className={inputCls(disabled)}
+              onChange={(e) => set({ zalohaProcent: e.target.value, zalohaTouched: true })}
+              disabled={disabled || value.bezZalohy}
+              className={inputCls(disabled || value.bezZalohy)}
             />
-          ) : (
-            <input
-              inputMode="decimal"
-              value={value.zalohaCastka}
-              onChange={(e) => set({ zalohaCastka: e.target.value })}
-              disabled={disabled}
-              placeholder="0"
-              className={inputCls(disabled)}
-            />
-          )}
+            <label className="flex items-center gap-2 text-sm text-[#111111] whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={value.bezZalohy}
+                onChange={(e) => set({ bezZalohy: e.target.checked, zalohaTouched: true })}
+                disabled={disabled}
+                className="accent-[#F04E12]"
+              />
+              Bez zálohy
+            </label>
+          </div>
         </div>
 
         {value.cenaRezim === 'hodinova' && (

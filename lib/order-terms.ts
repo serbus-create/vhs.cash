@@ -10,15 +10,14 @@ export interface OrderTermsState {
   contactEmail: string
   cenaRezim: CenaRezim
   hodinovaSazba: string
-  /** záloha v % (platí u 'pevna') */
+  /** záloha v % (ve všech způsobech ceny) */
   zalohaProcent: string
-  /** záloha v Kč bez DPH (platí u 'hodinova' a 'bez_ceny') */
-  zalohaCastka: string
+  /** "Bez zálohy": ukládá se 0 %, zadané procento zůstane zachováno */
+  bezZalohy: boolean
+  /** uživatel zálohu (procenta nebo "Bez zálohy") ručně změnil */
+  zalohaTouched: boolean
   odhadText: string
 }
-
-/** Záloha je u pevné ceny v procentech, jinak v Kč. */
-export const isDepositPercent = (r: CenaRezim): boolean => r === 'pevna'
 
 export const isPriced = (r: CenaRezim): boolean => r === 'pevna'
 
@@ -28,7 +27,8 @@ export const initialOrderTerms = (): OrderTermsState => ({
   cenaRezim: 'pevna',
   hodinovaSazba: '',
   zalohaProcent: '40',
-  zalohaCastka: '0',
+  bezZalohy: false,
+  zalohaTouched: false,
   odhadText: '',
 })
 
@@ -49,7 +49,8 @@ export function parseOrderTerms(doc: {
     cenaRezim,
     hodinovaSazba: tv.hodinova_sazba ?? '',
     zalohaProcent: tv.zaloha_objednavka_procent ?? '40',
-    zalohaCastka: tv.zaloha_objednavka_castka ?? '0',
+    bezZalohy: tv.zaloha_objednavka_procent === '0',
+    zalohaTouched: tv.zaloha_objednavka_procent !== undefined,
     odhadText: tv.odhad_text ?? '',
   }
 }
@@ -77,13 +78,9 @@ export function validateOrderTerms(s: OrderTermsState, strict: boolean): string 
     }
   }
 
-  if (isDepositPercent(s.cenaRezim)) {
+  if (!s.bezZalohy) {
     const dep = s.zalohaProcent.trim()
     if (!/^\d{1,3}$/.test(dep) || Number(dep) > 100) return 'Záloha musí být celé číslo od 0 do 100 %'
-  } else {
-    const dep = s.zalohaCastka.trim()
-    const n = parseAmount(dep)
-    if (!dep || !Number.isFinite(n) || n < 0) return 'Záloha musí být částka v Kč (0 nebo více)'
   }
   return null
 }
@@ -100,13 +97,8 @@ export function buildOrderTermsPayload(s: OrderTermsState, existing: TermsValues
   if (s.cenaRezim === 'hodinova' && rate) merged.hodinova_sazba = String(parseAmount(rate))
   else delete merged.hodinova_sazba
 
-  if (isDepositPercent(s.cenaRezim)) {
-    merged.zaloha_objednavka_procent = String(Number(s.zalohaProcent.trim()))
-    delete merged.zaloha_objednavka_castka
-  } else {
-    merged.zaloha_objednavka_castka = String(parseAmount(s.zalohaCastka.trim()))
-    delete merged.zaloha_objednavka_procent
-  }
+  merged.zaloha_objednavka_procent = s.bezZalohy ? '0' : String(Number(s.zalohaProcent.trim()))
+  delete merged.zaloha_objednavka_castka
 
   const odhad = s.odhadText.trim()
   if (odhad && s.cenaRezim === 'hodinova') merged.odhad_text = odhad
