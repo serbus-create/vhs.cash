@@ -5,7 +5,6 @@
 export type TermsValues = Record<string, string>
 
 export const TERMS_DEFAULTS: TermsValues = {
-  verze_podminek: '1.0',
   platnost_odkazu: '30',
   kola_pripominek: '2',
   min_jednotka_minut: '30',
@@ -32,11 +31,9 @@ export const TERMS_DEFAULTS: TermsValues = {
 }
 
 // Proměnné, které nemají výchozí hodnotu a musí je dodat objednávka nebo nastavení.
-// - hodinova_sazba: sazba v Kč bez DPH (každý klient může mít jinou)
-// - zaloha_castka: částka zálohy v Kč (počítá se z ceny, u hodinové sazby může být prázdná)
+// - zaloha_castka: částka zálohy v Kč (počítá se z ceny, u hodinové sazby a bez ceny může být prázdná)
 // - dodavatel_identifikace a klient_identifikace: skládají se funkcí buildPartyIdentification
 export const TERMS_REQUIRED_VARIABLES = [
-  'hodinova_sazba',
   'zaloha_castka',
   'dodavatel_identifikace',
   'klient_identifikace',

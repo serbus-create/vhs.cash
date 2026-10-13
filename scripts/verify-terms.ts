@@ -43,7 +43,7 @@ const orphan = variables.filter((v) => !(v in TERMS_DEFAULTS) && !required.has(v
 check('Všechny proměnné mají výchozí hodnotu nebo jsou povinné', orphan.length === 0, orphan.join(', '))
 const unusedDefaults = Object.keys(TERMS_DEFAULTS).filter((k) => !variables.includes(k))
 check('Výchozí hodnoty bez proměnné v textu nejsou', unusedDefaults.length === 0, unusedDefaults.join(', '))
-check('Šablona používá 28 proměnných', variables.length === 28, `(${variables.length})`)
+check('Šablona používá 26 proměnných', variables.length === 26, `(${variables.length})`)
 
 // 4. Identifikace stran
 const dodavatel = buildPartyIdentification({
@@ -80,7 +80,6 @@ check(
 const values = {
   dodavatel_identifikace: dodavatel.text,
   klient_identifikace: klientOsvc.text,
-  hodinova_sazba: '900',
   zaloha_castka: '12 000',
 }
 const full = renderTerms(values)
@@ -88,9 +87,10 @@ const fullText = renderTermsToText(full)
 check('Plné vykreslení nemá chybějící proměnné', full.missing.length === 0, full.missing.join(', '))
 check('Ve vykresleném textu nezůstalo {{', !fullText.includes('{{'))
 check('Ve vykresleném textu není [DOPLNIT]', !fullText.includes(MISSING_PLACEHOLDER))
+check('Klientský text neobsahuje slovo verze', !/verz/i.test(fullText))
 check('Žádná zadaná hodnota není nepoužitá', full.unused.length === 0, full.unused.join(', '))
 check('Záloha 40 % a částka v čl. 5.3', fullText.includes('výchozí je 40 % pevné ceny (12 000 Kč)'))
-check('Sazba 900 Kč v čl. 2.3', fullText.includes('hodinové sazby 900 Kč bez DPH'))
+check('Čl. 2.3 nemá číslo sazby a odkazuje na objednávku', fullText.includes('hodinové sazby uvedené v objednávce, jinak podle sazby, kterou dodavatel sdělí e-mailem'))
 
 // 6. Bez zálohové částky (hodinová sazba) se závorka vypustí a nic nechybí
 const hourly = renderTerms({ ...values, zaloha_castka: '' })
@@ -102,7 +102,7 @@ check('Bez částky zálohy nic nechybí', hourly.missing.length === 0)
 const bare = renderTerms({})
 check(
   'Prázdné hodnoty hlásí povinné proměnné',
-  ['hodinova_sazba', 'dodavatel_identifikace', 'klient_identifikace'].every((v) => bare.missing.includes(v)),
+  ['dodavatel_identifikace', 'klient_identifikace'].every((v) => bare.missing.includes(v)),
   `(${bare.missing.join(', ')})`,
 )
 check('Přebití výchozí hodnoty funguje', renderTermsToText(renderTerms({ ...values, zaloha_procent: '30' })).includes('výchozí je 30 %'))

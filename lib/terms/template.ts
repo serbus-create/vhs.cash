@@ -32,7 +32,7 @@ export const TERMS_ARTICLES: TermsArticle[] = [
       },
       {
         id: '1.3',
-        text: 'Potvrzením (kliknutím na odkaz v e-mailu, podpisem nebo e-mailovou odpovědí) klient souhlasí s těmito podmínkami ve verzi {{verze_podminek}} a s objednávkou, je-li k nim přiložena. Dodavatel uloží záznam o potvrzení (čas, jméno, e-mail a znění podmínek) jako doklad o uzavření zakázky. Odkaz je platný {{platnost_odkazu}} dnů.',
+        text: 'Potvrzením (kliknutím na odkaz v e-mailu, podpisem nebo e-mailovou odpovědí) klient souhlasí s těmito podmínkami a s objednávkou, je-li k nim přiložena. Dodavatel uloží záznam o potvrzení (čas, jméno, e-mail a znění podmínek) jako doklad o uzavření zakázky. Odkaz je platný {{platnost_odkazu}} dnů.',
       },
       {
         id: '1.4',
@@ -62,7 +62,7 @@ export const TERMS_ARTICLES: TermsArticle[] = [
       },
       {
         id: '2.3',
-        text: 'Nadstandardní úpravy se účtují podle hodinové sazby {{hodinova_sazba}} Kč bez DPH, po {{min_jednotka_minut}} minutách. Stejnou sazbou se účtuje veškerá práce, je-li cena v objednávce určena hodinovou sazbou. Mohou posunout termíny.',
+        text: 'Nadstandardní úpravy se účtují podle hodinové sazby uvedené v objednávce, jinak podle sazby, kterou dodavatel sdělí e-mailem před zahájením úprav. Sazba je bez DPH a účtuje se po {{min_jednotka_minut}} minutách. Stejnou sazbou se účtuje veškerá práce, je-li cena v objednávce určena hodinovou sazbou. Mohou posunout termíny.',
       },
       {
         id: '2.4',
