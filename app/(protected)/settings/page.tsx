@@ -21,7 +21,6 @@ const EMPTY_FORM = {
   profile_type: 'sro',
   spisova_znacka: '',
   represented_by: '',
-  default_hourly_rate: '',
 }
 
 export default function SettingsPage() {
@@ -83,7 +82,6 @@ export default function SettingsPage() {
       profile_type: p.profile_type ?? 'sro',
       spisova_znacka: p.spisova_znacka ?? '',
       represented_by: p.represented_by ?? '',
-      default_hourly_rate: p.default_hourly_rate != null ? String(p.default_hourly_rate).replace('.', ',') : '',
     })
     setVatPayer(p.vat_payer ?? true)
     setInvoiceSeries(p.invoice_number_series ?? 1)
@@ -94,18 +92,10 @@ export default function SettingsPage() {
   const handleSave = async () => {
     if (!form.name.trim()) { setError('Název je povinný'); return }
 
-    // nová pole jen pro admina; ostatním se do payloadu nepřidávají (nepřepíšou se)
-    const { represented_by, default_hourly_rate, ...baseForm } = form
-    const extra: { default_hourly_rate?: number | null; represented_by?: string | null } = {}
+    // zástupce jen pro admina; ostatním se do payloadu nepřidává (nepřepíše se)
+    const { represented_by, ...baseForm } = form
+    const extra: { represented_by?: string | null } = {}
     if (isAdmin) {
-      const rateRaw = default_hourly_rate.trim().replace(/\s/g, '').replace(',', '.')
-      if (rateRaw === '') {
-        extra.default_hourly_rate = null
-      } else {
-        const rate = Number(rateRaw)
-        if (!Number.isFinite(rate) || rate <= 0) { setError('Výchozí hodinová sazba musí být číslo větší než 0'); return }
-        extra.default_hourly_rate = Math.round(rate * 100) / 100
-      }
       extra.represented_by = form.profile_type === 'sro' ? (represented_by.trim() || null) : null
     }
 
@@ -434,24 +424,6 @@ export default function SettingsPage() {
                     />
                     <p className="text-xs text-gray-400 mt-1">
                       Pište ve 7. pádu za slovem zastoupená, například: jednateli Petrem Janošťákem a Milošem Serbusem, z nichž každý jedná samostatně. U OSVČ nevyplňujte.
-                    </p>
-                  </div>
-                )}
-
-                {isAdmin && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                      Výchozí hodinová sazba (Kč bez DPH)
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={form.default_hourly_rate}
-                      onChange={(e) => setForm((prev) => ({ ...prev, default_hourly_rate: e.target.value }))}
-                      className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                      Použije se v čl. 2.3 podmínek spolupráce pro nadstandardní práci a pro zakázky bez ceny.
                     </p>
                   </div>
                 )}
