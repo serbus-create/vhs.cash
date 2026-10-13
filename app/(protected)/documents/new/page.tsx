@@ -7,7 +7,7 @@ import { useUserRole } from '@/lib/useUserRole'
 import type { Client, CompanyProfile } from '@/lib/types'
 import { formatCurrency, TYPE_PREFIX, calcDocumentTotals } from '@/lib/utils'
 import OrderTermsSection from '@/components/order-terms-section'
-import { initialOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload } from '@/lib/order-terms'
+import { applyClientContact, initialOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload } from '@/lib/order-terms'
 
 interface LineItem {
   id: string
@@ -66,6 +66,13 @@ function NewDocumentForm() {
   // Derive profile type from selected profile
   const selectedProfile = companyProfiles.find((p) => p.id === companyProfileId)
   const isSro = selectedProfile?.profile_type === 'sro'
+
+  // Objednávka: předvyplnění kontaktu z vybraného klienta (ručně změněná pole se nepřepisují)
+  useEffect(() => {
+    if (docType !== 'objednavka') return
+    const client = clients.find((c) => c.id === clientId)
+    setOrderTerms((s) => applyClientContact(s, client))
+  }, [docType, clientId, clients])
 
   // Load clients and company profiles
   useEffect(() => {
@@ -400,6 +407,7 @@ function NewDocumentForm() {
           <OrderTermsSection
             value={orderTerms}
             onChange={setOrderTerms}
+            hasClient={!!clientId}
             hasPricedData={items.some((i) => i.unitPrice > 0 || i.discountPercent > 0) || docDiscountPercent > 0}
           />
         )}

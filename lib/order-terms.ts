@@ -19,6 +19,9 @@ export interface OrderTermsState {
   odhadText: string
   /** termín plnění, volný text (výchozí 'dle dohody') */
   terminText: string
+  /** uživatel pole ručně změnil / uložená hodnota je neprázdná; neukládá se do databáze */
+  contactNameTouched: boolean
+  contactEmailTouched: boolean
 }
 
 export const DEFAULT_TERMIN = 'dle dohody'
@@ -36,6 +39,8 @@ export const initialOrderTerms = (): OrderTermsState => ({
   zalohaTouched: false,
   odhadText: '',
   terminText: DEFAULT_TERMIN,
+  contactNameTouched: false,
+  contactEmailTouched: false,
 })
 
 const asRezim = (v: unknown): CenaRezim =>
@@ -59,7 +64,29 @@ export function parseOrderTerms(doc: {
     zalohaTouched: tv.zaloha_objednavka_procent !== undefined,
     odhadText: tv.odhad_text ?? '',
     terminText: tv.termin_text?.trim() || DEFAULT_TERMIN,
+    contactNameTouched: !!doc.contact_name?.trim(),
+    contactEmailTouched: !!doc.contact_email?.trim(),
   }
+}
+
+/** Předvyplní kontakt z klienta do polí, která uživatel neměnil (a nebyla uložena neprázdná). */
+export function applyClientContact(
+  state: OrderTermsState,
+  client: { contact_name?: string | null; contact_email?: string | null } | null | undefined,
+): OrderTermsState {
+  const name = state.contactNameTouched ? state.contactName : (client?.contact_name ?? '')
+  const email = state.contactEmailTouched ? state.contactEmail : (client?.contact_email ?? '')
+  if (name === state.contactName && email === state.contactEmail) return state
+  return { ...state, contactName: name, contactEmail: email }
+}
+
+/** Názvy chybějících kontaktních údajů; prázdné, dokud není vybrán klient. */
+export function contactMissing(state: OrderTermsState, hasClient: boolean): string[] {
+  if (!hasClient) return []
+  const missing: string[] = []
+  if (!state.contactName.trim()) missing.push('jméno kontaktní osoby')
+  if (!state.contactEmail.trim()) missing.push('e-mail kontaktní osoby')
+  return missing
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

@@ -43,6 +43,8 @@ export interface Client {
   country: string | null
   entity_type?: 'firma' | 'osvc' | null
   represented_by?: string | null
+  contact_name?: string | null
+  contact_email?: string | null
   created_at: string
 }
 

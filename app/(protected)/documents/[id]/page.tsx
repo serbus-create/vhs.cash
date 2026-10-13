@@ -7,7 +7,7 @@ import type { Client, CompanyProfile, DocumentItem, DocumentStatus, DocumentType
 import { formatCurrency, TYPE_LABELS, STATUS_LABELS, calcDocumentTotals } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
 import OrderTermsSection from '@/components/order-terms-section'
-import { initialOrderTerms, parseOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload, missingLabel } from '@/lib/order-terms'
+import { applyClientContact, initialOrderTerms, parseOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload, missingLabel } from '@/lib/order-terms'
 
 interface LineItem {
   id: string
@@ -400,7 +400,10 @@ export default function EditDocumentPage() {
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Klient</label>
               <select
                 value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
+                onChange={(e) => {
+                  setClientId(e.target.value)
+                  if (isOrder) setOrderTerms((s) => applyClientContact(s, clients.find((c) => c.id === e.target.value)))
+                }}
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
               >
                 <option value="">— Vyberte klienta —</option>
@@ -503,6 +506,7 @@ export default function EditDocumentPage() {
           <OrderTermsSection
             value={orderTerms}
             onChange={setOrderTerms}
+            hasClient={!!clientId}
             hasPricedData={items.some((i) => i.unitPrice > 0 || i.discountPercent > 0) || docDiscountPercent > 0}
             disabled={isReadOnly}
           />

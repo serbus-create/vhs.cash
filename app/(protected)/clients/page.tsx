@@ -7,7 +7,7 @@ import { useUserRole } from '@/lib/useUserRole'
 
 const EMPTY_FORM = {
   name: '', ico: '', dic: '', address: '', city: '', zip: '', email: '', phone: '',
-  entity_type: '', represented_by: '',
+  entity_type: '', represented_by: '', contact_name: '', contact_email: '',
 }
 
 const COUNTRIES = [
@@ -63,7 +63,7 @@ export default function ClientsPage() {
 
   const openEdit = (c: Client) => {
     setEditing(c)
-    setForm({ name: c.name, ico: c.ico ?? '', dic: c.dic ?? '', address: c.address ?? '', city: c.city ?? '', zip: c.zip ?? '', email: c.email ?? '', phone: c.phone ?? '', entity_type: c.entity_type ?? '', represented_by: c.represented_by ?? '' })
+    setForm({ name: c.name, ico: c.ico ?? '', dic: c.dic ?? '', address: c.address ?? '', city: c.city ?? '', zip: c.zip ?? '', email: c.email ?? '', phone: c.phone ?? '', entity_type: c.entity_type ?? '', represented_by: c.represented_by ?? '', contact_name: c.contact_name ?? '', contact_email: c.contact_email ?? '' })
     setCountry(c.country ?? 'CZ')
     setError('')
     setLookupError('')
@@ -109,11 +109,20 @@ export default function ClientsPage() {
     setSaving(true)
     setError('')
 
+    const contactEmail = form.contact_email.trim()
+    if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+      setError('E-mail kontaktní osoby nemá platný formát')
+      setSaving(false)
+      return
+    }
+
     const entityType = form.entity_type === 'firma' || form.entity_type === 'osvc' ? form.entity_type : null
     const payload = {
       ...form,
       entity_type: entityType,
       represented_by: entityType === 'firma' ? form.represented_by.trim() || null : null,
+      contact_name: form.contact_name.trim() || null,
+      contact_email: contactEmail || null,
       country,
     }
 
@@ -380,6 +389,12 @@ export default function ClientsPage() {
                   <FormField label="Email" placeholder="info@firma.cz" {...field('email')} />
                   <FormField label="Telefon" placeholder="+420 000 000 000" {...field('phone')} />
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Kontaktní osoba" placeholder="Jméno a příjmení" {...field('contact_name')} />
+                  <FormField label="E-mail kontaktní osoby" placeholder="jmeno@firma.cz" {...field('contact_email')} />
+                </div>
+                <p className="-mt-2 text-xs text-gray-500">Použije se v objednávkách k potvrzení podmínek. Nepovinné.</p>
               </div>
 
               {error && <p className="text-red-500 text-sm mt-4">{error}</p>}

@@ -1,6 +1,6 @@
 'use client'
 
-import { isPriced, type CenaRezim, type OrderTermsState } from '@/lib/order-terms'
+import { contactMissing, isPriced, type CenaRezim, type OrderTermsState } from '@/lib/order-terms'
 
 const RADIOS: { value: CenaRezim; label: string }[] = [
   { value: 'pevna', label: 'Pevná cena' },
@@ -16,13 +16,17 @@ export default function OrderTermsSection({
   onChange,
   hasPricedData,
   disabled,
+  hasClient,
 }: {
   value: OrderTermsState
   onChange: (next: OrderTermsState) => void
   /** formulář obsahuje ceny/slevy, které by se při přechodu na hodinovou sazbu / bez ceny vynulovaly */
   hasPricedData: boolean
   disabled?: boolean
+  /** je vybrán klient (bez něj se poznámka o chybějícím kontaktu neukazuje) */
+  hasClient: boolean
 }) {
+  const missingContact = contactMissing(value, hasClient)
   const set = (patch: Partial<OrderTermsState>) => onChange({ ...value, ...patch })
 
   const changeRezim = (r: CenaRezim) => {
@@ -45,7 +49,7 @@ export default function OrderTermsSection({
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Kontaktní osoba klienta</label>
           <input
             value={value.contactName}
-            onChange={(e) => set({ contactName: e.target.value })}
+            onChange={(e) => set({ contactName: e.target.value, contactNameTouched: true })}
             disabled={disabled}
             placeholder="Jméno a příjmení"
             className={inputCls(disabled)}
@@ -56,12 +60,18 @@ export default function OrderTermsSection({
           <input
             type="email"
             value={value.contactEmail}
-            onChange={(e) => set({ contactEmail: e.target.value })}
+            onChange={(e) => set({ contactEmail: e.target.value, contactEmailTouched: true })}
             disabled={disabled}
             placeholder="jmeno@firma.cz"
             className={inputCls(disabled)}
           />
         </div>
+
+        {missingContact.length > 0 && (
+          <p className="sm:col-span-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Chybí: {missingContact.join(', ')}. Bez nich nepůjde objednávku odeslat klientovi k potvrzení. Doplňte je tady nebo u klienta.
+          </p>
+        )}
 
         <div className="sm:col-span-2">
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Termín</label>
