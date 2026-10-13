@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useUserRole } from '@/lib/useUserRole'
 import type { Client, CompanyProfile } from '@/lib/types'
 import { formatCurrency, TYPE_PREFIX, calcDocumentTotals } from '@/lib/utils'
+import OrderTermsSection from '@/components/order-terms-section'
+import { initialOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload } from '@/lib/order-terms'
 
 interface LineItem {
   id: string
@@ -54,6 +56,7 @@ function NewDocumentForm() {
   const [currency, setCurrency] = useState('CZK')
   const [docDiscountPercent, setDocDiscountPercent] = useState(0)
   const [docDiscountNote, setDocDiscountNote] = useState('')
+  const [orderTerms, setOrderTerms] = useState(initialOrderTerms)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -140,8 +143,11 @@ function NewDocumentForm() {
   }
 
   // Computed totals (with discounts)
+  // Objednávka s hodinovou sazbou / bez ceny: bez cen, slev a součtů
+  const isOrder = docType === 'objednavka'
+  const priced = !isOrder || isPriced(orderTerms.cenaRezim)
   const { subtotalBeforeDocDiscount, totalWithoutVat, vatAmount, totalWithVat } =
-    calcDocumentTotals(items, docDiscountPercent)
+    priced ? calcDocumentTotals(items, docDiscountPercent) : { subtotalBeforeDocDiscount: 0, totalWithoutVat: 0, vatAmount: 0, totalWithVat: 0 }
   const hasAnyDiscount = items.some((i) => i.discountPercent > 0) || docDiscountPercent > 0
 
   const updateItem = (id: string, key: keyof LineItem, value: string | number) => {
@@ -156,6 +162,10 @@ function NewDocumentForm() {
   const handleSave = async (status: 'draft' | 'issued' | 'sent') => {
     if (!number.trim()) { setError('Číslo dokumentu je povinné'); return }
     if (items.some((i) => !i.description.trim())) { setError('Každá položka musí mít popis'); return }
+    if (isOrder) {
+      const termsErr = validateOrderTerms(orderTerms, status !== 'draft')
+      if (termsErr) { setError(termsErr); return }
+    }
 
     if (!workspaceId) { setError('Načítání workspace, zkuste za chvíli'); return }
 
@@ -182,8 +192,10 @@ function NewDocumentForm() {
         currency,
         total_without_vat: Math.round(totalWithoutVat * 100) / 100,
         total_with_vat: Math.round(totalWithVat * 100) / 100,
-        discount_percent: docDiscountPercent,
-        discount_note: docDiscountNote || null,
+        discount_percent: priced ? docDiscountPercent : 0,
+        discount_note: priced ? (docDiscountNote || null) : null,
+        ...(isOrder ? buildOrderTermsPayload(orderTerms, null) : {}),
+        ...(priced ? {} : { amount_czk: 0 }),
       })
       .select()
       .single()
@@ -195,17 +207,17 @@ function NewDocumentForm() {
         document_id: doc.id,
         description: i.description,
         quantity: i.quantity,
-        unit_price: i.unitPrice,
+        unit_price: priced ? i.unitPrice : 0,
         vat_rate: i.vatRate,
-        discount_percent: i.discountPercent,
-        discount_note: i.discountNote || null,
+        discount_percent: priced ? i.discountPercent : 0,
+        discount_note: priced ? (i.discountNote || null) : null,
       }))
     )
 
     if (itemsErr) { setError(itemsErr.message); setSaving(false); return }
 
     // Dopočítat kurz a CZK ekvivalent při vydání faktury
-    if (status !== 'draft') {
+    if (status !== 'draft' && priced) {
       if (currency === 'EUR' && issueDate) {
         try {
           const rateRes = await fetch(`/api/exchange-rate/${issueDate}`)
@@ -384,19 +396,27 @@ function NewDocumentForm() {
           </div>
         </div>
 
+        {isOrder && (
+          <OrderTermsSection
+            value={orderTerms}
+            onChange={setOrderTerms}
+            hasPricedData={items.some((i) => i.unitPrice > 0 || i.discountPercent > 0) || docDiscountPercent > 0}
+          />
+        )}
+
         {/* Line items */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-[#111111] uppercase tracking-wide">Položky</h2>
           </div>
 
-          <div className="hidden md:grid grid-cols-[2fr_72px_110px_60px_64px_100px_36px] gap-2 px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className={`hidden md:grid ${priced ? 'grid-cols-[2fr_72px_110px_60px_64px_100px_36px]' : 'grid-cols-[2fr_72px_36px]'} gap-2 px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide`}>
             <span>Popis</span>
             <span>Počet</span>
-            <span>Cena/ks (bez DPH)</span>
-            <span>DPH %</span>
-            <span>Sleva %</span>
-            <span className="text-right">Celkem s DPH</span>
+            {priced && <span>Cena/ks (bez DPH)</span>}
+            {priced && <span>DPH %</span>}
+            {priced && <span>Sleva %</span>}
+            {priced && <span className="text-right">Celkem s DPH</span>}
             <span />
           </div>
 
@@ -425,7 +445,7 @@ function NewDocumentForm() {
                       placeholder={`Popis položky`}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12] mb-3"
                     />
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className={`grid gap-2 ${priced ? 'grid-cols-4' : 'grid-cols-1'}`}>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Počet</label>
                         <input
@@ -435,6 +455,7 @@ function NewDocumentForm() {
                           className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                         />
                       </div>
+                      {priced && (<>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Cena/ks</label>
                         <input
@@ -465,8 +486,9 @@ function NewDocumentForm() {
                           className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                         />
                       </div>
+                      </>)}
                     </div>
-                    {item.discountPercent > 0 && (
+                    {priced && item.discountPercent > 0 && (
                       <div className="mt-2">
                         <label className="block text-xs text-gray-500 mb-1">Popis slevy</label>
                         <input
@@ -477,15 +499,17 @@ function NewDocumentForm() {
                         />
                       </div>
                     )}
-                    <div className="flex justify-end mt-2">
-                      <span className="text-sm font-medium text-[#111111]">
-                        = {formatCurrency(lineTotal, currency)}
-                      </span>
-                    </div>
+                    {priced && (
+                      <div className="flex justify-end mt-2">
+                        <span className="text-sm font-medium text-[#111111]">
+                          = {formatCurrency(lineTotal, currency)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {/* Desktop item row */}
                   <div className="hidden md:block">
-                    <div className="grid grid-cols-[2fr_72px_110px_60px_64px_100px_36px] gap-2 px-6 py-3 items-center">
+                    <div className={`grid ${priced ? 'grid-cols-[2fr_72px_110px_60px_64px_100px_36px]' : 'grid-cols-[2fr_72px_36px]'} gap-2 px-6 py-3 items-center`}>
                       <input
                         value={item.description}
                         onChange={(e) => updateItem(item.id, 'description', e.target.value)}
@@ -498,6 +522,7 @@ function NewDocumentForm() {
                         onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
                         className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                       />
+                      {priced && (<>
                       <input
                         type="number" min="0" step="0.01"
                         value={item.unitPrice}
@@ -523,6 +548,7 @@ function NewDocumentForm() {
                       <span className="text-right text-sm font-medium text-[#111111]">
                         {formatCurrency(lineTotal, currency)}
                       </span>
+                      </>)}
                       <button
                         onClick={() => removeItem(item.id)}
                         disabled={items.length === 1}
@@ -533,7 +559,7 @@ function NewDocumentForm() {
                         </svg>
                       </button>
                     </div>
-                    {item.discountPercent > 0 && (
+                    {priced && item.discountPercent > 0 && (
                       <div className="px-6 pb-3 -mt-1">
                         <input
                           value={item.discountNote}
@@ -563,6 +589,7 @@ function NewDocumentForm() {
         </div>
 
         {/* Totals */}
+        {priced && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <div className="flex flex-col sm:flex-row gap-6 justify-between items-start">
             {/* Doc-level discount input */}
@@ -618,6 +645,7 @@ function NewDocumentForm() {
             </div>
           </div>
         </div>
+        )}
 
         {error && (
           <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg">{error}</div>

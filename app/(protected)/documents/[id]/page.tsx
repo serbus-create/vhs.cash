@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import type { Client, CompanyProfile, DocumentItem, DocumentStatus, DocumentType } from '@/lib/types'
 import { formatCurrency, TYPE_LABELS, STATUS_LABELS, calcDocumentTotals } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
+import OrderTermsSection from '@/components/order-terms-section'
+import { initialOrderTerms, parseOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload } from '@/lib/order-terms'
 
 interface LineItem {
   id: string
@@ -63,6 +65,8 @@ export default function EditDocumentPage() {
   const [docDiscountNote, setDocDiscountNote] = useState('')
   const [hasExchangeRate, setHasExchangeRate] = useState(false)
   const [paidAmount, setPaidAmount] = useState<number | null>(null)
+  const [orderTerms, setOrderTerms] = useState(initialOrderTerms)
+  const [existingTermsValues, setExistingTermsValues] = useState<Record<string, string> | null>(null)
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState('')
@@ -108,6 +112,8 @@ export default function EditDocumentPage() {
       setDocDiscountNote(doc.discount_note ?? '')
       setHasExchangeRate(doc.exchange_rate != null)
       setPaidAmount(doc.paid_amount ?? null)
+      setOrderTerms(parseOrderTerms(doc))
+      setExistingTermsValues(doc.terms_values ?? null)
 
       const fetchedItems: DocumentItem[] = doc.document_items ?? []
       setItems(
@@ -128,8 +134,11 @@ export default function EditDocumentPage() {
   }, [docId, workspaceId])
 
   // Computed totals (with discounts)
+  // Objednávka s hodinovou sazbou / bez ceny: bez cen, slev a součtů
+  const isOrder = docType === 'objednavka'
+  const priced = !isOrder || isPriced(orderTerms.cenaRezim)
   const { subtotalBeforeDocDiscount, totalWithoutVat, vatAmount, totalWithVat } =
-    calcDocumentTotals(items, docDiscountPercent)
+    priced ? calcDocumentTotals(items, docDiscountPercent) : { subtotalBeforeDocDiscount: 0, totalWithoutVat: 0, vatAmount: 0, totalWithVat: 0 }
   const hasAnyDiscount = items.some((i) => i.discountPercent > 0) || docDiscountPercent > 0
 
   const updateItem = (id: string, key: keyof LineItem, value: string | number) => {
@@ -144,6 +153,10 @@ export default function EditDocumentPage() {
   const handleUpdate = async () => {
     if (!number.trim()) { setError('Číslo dokumentu je povinné'); return }
     if (items.some((i) => !i.description.trim())) { setError('Každá položka musí mít popis'); return }
+    if (isOrder) {
+      const termsErr = validateOrderTerms(orderTerms, ['issued', 'sent'].includes(status))
+      if (termsErr) { setError(termsErr); return }
+    }
 
     setSaving(true)
     setError('')
@@ -151,7 +164,9 @@ export default function EditDocumentPage() {
 
     // Dopočítat kurz při prvním přechodu do stavu issued / sent
     const exchangeFields: { exchange_rate?: number; amount_czk?: number } = {}
-    if (['issued', 'sent'].includes(status) && !hasExchangeRate) {
+    if (!priced) {
+      exchangeFields.amount_czk = 0
+    } else if (['issued', 'sent'].includes(status) && !hasExchangeRate) {
       if (currency === 'EUR' && issueDate) {
         try {
           const rateRes = await fetch(`/api/exchange-rate/${issueDate}`)
@@ -183,15 +198,26 @@ export default function EditDocumentPage() {
         currency,
         total_without_vat: Math.round(totalWithoutVat * 100) / 100,
         total_with_vat: Math.round(totalWithVat * 100) / 100,
-        discount_percent: docDiscountPercent,
-        discount_note: docDiscountNote || null,
+        discount_percent: priced ? docDiscountPercent : 0,
+        discount_note: priced ? (docDiscountNote || null) : null,
         paid_amount: paidAmount,
+        ...(isOrder ? buildOrderTermsPayload(orderTerms, existingTermsValues) : {}),
         ...exchangeFields,
       })
       .eq('id', docId)
 
     if (docErr) { setError(docErr.message); setSaving(false); return }
     if (exchangeFields.exchange_rate !== undefined) setHasExchangeRate(true)
+    if (isOrder) {
+      const saved = buildOrderTermsPayload(orderTerms, existingTermsValues)
+      setExistingTermsValues(saved.terms_values)
+    }
+    if (!priced) {
+      // ceny a slevy jsou uloženy jako 0 → stav formuláře odpovídá databázi
+      setItems((prev) => prev.map((i) => ({ ...i, unitPrice: 0, discountPercent: 0, discountNote: '' })))
+      setDocDiscountPercent(0)
+      setDocDiscountNote('')
+    }
 
     // Replace items atomically
     await supabase.from('document_items').delete().eq('document_id', docId)
@@ -200,10 +226,10 @@ export default function EditDocumentPage() {
         document_id: docId,
         description: i.description,
         quantity: i.quantity,
-        unit_price: i.unitPrice,
+        unit_price: priced ? i.unitPrice : 0,
         vat_rate: i.vatRate,
-        discount_percent: i.discountPercent,
-        discount_note: i.discountNote || null,
+        discount_percent: priced ? i.discountPercent : 0,
+        discount_note: priced ? (i.discountNote || null) : null,
       }))
     )
 
@@ -462,19 +488,28 @@ export default function EditDocumentPage() {
           </div>
         </div>
 
+        {isOrder && (
+          <OrderTermsSection
+            value={orderTerms}
+            onChange={setOrderTerms}
+            hasPricedData={items.some((i) => i.unitPrice > 0 || i.discountPercent > 0) || docDiscountPercent > 0}
+            disabled={isReadOnly}
+          />
+        )}
+
         {/* Line items */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-[#111111] uppercase tracking-wide">Položky</h2>
           </div>
 
-          <div className="grid grid-cols-[2fr_72px_110px_60px_64px_100px_36px] gap-2 px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className={`grid ${priced ? 'grid-cols-[2fr_72px_110px_60px_64px_100px_36px]' : 'grid-cols-[2fr_72px_36px]'} gap-2 px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wide`}>
             <span>Popis</span>
             <span>Počet</span>
-            <span>Cena/ks (bez DPH)</span>
-            <span>DPH %</span>
-            <span>Sleva %</span>
-            <span className="text-right">Celkem s DPH</span>
+            {priced && <span>Cena/ks (bez DPH)</span>}
+            {priced && <span>DPH %</span>}
+            {priced && <span>Sleva %</span>}
+            {priced && <span className="text-right">Celkem s DPH</span>}
             <span />
           </div>
 
@@ -483,7 +518,7 @@ export default function EditDocumentPage() {
               const lineTotal = item.quantity * item.unitPrice * (1 - item.discountPercent / 100) * (1 + item.vatRate / 100)
               return (
                 <div key={item.id}>
-                  <div className="grid grid-cols-[2fr_72px_110px_60px_64px_100px_36px] gap-2 px-6 py-3 items-center">
+                  <div className={`grid ${priced ? 'grid-cols-[2fr_72px_110px_60px_64px_100px_36px]' : 'grid-cols-[2fr_72px_36px]'} gap-2 px-6 py-3 items-center`}>
                     <input
                       value={item.description}
                       onChange={(e) => updateItem(item.id, 'description', e.target.value)}
@@ -496,6 +531,7 @@ export default function EditDocumentPage() {
                       onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                     />
+                    {priced && (<>
                     <input
                       type="number" min="0" step="0.01"
                       value={item.unitPrice}
@@ -522,6 +558,7 @@ export default function EditDocumentPage() {
                     <span className="text-right text-sm font-medium text-[#111111]">
                       {formatCurrency(lineTotal, currency)}
                     </span>
+                    </>)}
                     <button
                       onClick={() => removeItem(item.id)}
                       disabled={items.length === 1}
@@ -532,7 +569,7 @@ export default function EditDocumentPage() {
                       </svg>
                     </button>
                   </div>
-                  {item.discountPercent > 0 && (
+                  {priced && item.discountPercent > 0 && (
                     <div className="px-6 pb-3 -mt-1">
                       <input
                         value={item.discountNote}
@@ -562,6 +599,7 @@ export default function EditDocumentPage() {
         </div>
 
         {/* Totals */}
+        {priced && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <div className="flex flex-col sm:flex-row gap-6 justify-between items-start">
             {/* Doc-level discount input */}
@@ -619,6 +657,7 @@ export default function EditDocumentPage() {
             </div>
           </div>
         </div>
+        )}
 
         {error && (
           <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg">{error}</div>

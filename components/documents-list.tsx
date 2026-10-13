@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import type { Document, DocumentStatus, DocumentType } from '@/lib/types'
+import { orderPriceLabel } from '@/lib/order-terms'
 import { formatCurrency, formatDate, monthLabel, STATUS_LABELS, STATUS_COLORS, getDisplayStatus } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
 import MonthNav from '@/components/month-nav'
@@ -288,7 +289,7 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                     </div>
                     <p className="text-sm font-medium text-[#111111]">{(doc.clients as any)?.name ?? '—'}</p>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="text-sm font-bold text-[#111111]">{formatCurrency(total, doc.currency)}</span>
+                      <span className="text-sm font-bold text-[#111111]">{orderPriceLabel(doc) ?? formatCurrency(total, doc.currency)}</span>
                       <span className="text-xs text-gray-400">
                         {doc.due_date ? `Spl. ${formatDate(doc.due_date)}` : formatDate(doc.issue_date)}
                       </span>
@@ -424,7 +425,7 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                     )}
                   </td>
                   <td className="px-6 py-3.5 text-right font-medium">
-                    {formatCurrency(doc.total_with_vat ?? 0, doc.currency)}
+                    {orderPriceLabel(doc) ?? formatCurrency(doc.total_with_vat ?? 0, doc.currency)}
                     {doc.paid_amount != null && doc.paid_amount < (doc.amount_czk ?? doc.total_with_vat ?? 0) && (
                       <div className="text-xs text-gray-400 font-normal mt-0.5">
                         uhrazeno {formatCurrency(doc.paid_amount)}
