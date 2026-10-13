@@ -47,6 +47,7 @@ export async function GET(
       address: streetParts.join(' ') || sidlo.textovaAdresa || '',
       city: sidlo.nazevObce ?? '',
       zip: sidlo.psc ? String(sidlo.psc) : '',
+      legal_form: data.pravniForma != null ? String(data.pravniForma) : null,
     })
   } catch (err) {
     return NextResponse.json({ error: 'Chyba při dotazu na ARES' }, { status: 500 })

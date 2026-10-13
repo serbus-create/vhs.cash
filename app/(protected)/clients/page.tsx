@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Client } from '@/lib/types'
 import { useUserRole } from '@/lib/useUserRole'
+import { entityTypeFromLegalForm } from '@/lib/ares-entity'
 
 const EMPTY_FORM = {
   name: '', ico: '', dic: '', address: '', city: '', zip: '', email: '', phone: '',
@@ -36,6 +37,10 @@ export default function ClientsPage() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState('')
   const [isVatPayer, setIsVatPayer] = useState<boolean | null>(null)
+  const [typeFromAres, setTypeFromAres] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{ updated: number; failed: number; names: string[] } | null>(null)
+  const [bulkError, setBulkError] = useState('')
   const [error, setError] = useState('')
   const supabase = createClient()
   const { role, workspaceId } = useUserRole()
@@ -58,11 +63,13 @@ export default function ClientsPage() {
     setError('')
     setLookupError('')
     setIsVatPayer(null)
+    setTypeFromAres(false)
     setShowModal(true)
   }
 
   const openEdit = (c: Client) => {
     setEditing(c)
+    setTypeFromAres(false)
     setForm({ name: c.name, ico: c.ico ?? '', dic: c.dic ?? '', address: c.address ?? '', city: c.city ?? '', zip: c.zip ?? '', email: c.email ?? '', phone: c.phone ?? '', entity_type: c.entity_type ?? '', represented_by: c.represented_by ?? '', contact_name: c.contact_name ?? '', contact_email: c.contact_email ?? '' })
     setCountry(c.country ?? 'CZ')
     setError('')
@@ -77,6 +84,7 @@ export default function ClientsPage() {
     setLookupLoading(true)
     setLookupError('')
     setIsVatPayer(null)
+    setTypeFromAres(false)
     try {
       const url = country === 'CZ'
         ? `/api/ares/${id}`
@@ -88,8 +96,11 @@ export default function ClientsPage() {
       }
       const data = await res.json()
       setIsVatPayer(data.is_vat_payer ?? false)
+      const aresType = country === 'CZ' ? entityTypeFromLegalForm(data.legal_form) : null
+      if (aresType) setTypeFromAres(true)
       setForm((f) => ({
         ...f,
+        ...(aresType ? { entity_type: aresType } : {}),
         name: data.name || f.name,
         ico: data.ico || f.ico,
         dic: data.dic || '',
@@ -153,6 +164,26 @@ export default function ClientsPage() {
       setForm((f) => ({ ...f, [key]: e.target.value })),
   })
 
+  const missingTypeCount = clients.filter((c) => !c.entity_type && c.ico && (c.country ?? 'CZ') === 'CZ').length
+
+  const runBulk = async () => {
+    if (!window.confirm(`Doplnit typ klienta z ARES u ${missingTypeCount} klientů? U jednoho zavolání se zpracuje nejvýše 100 klientů.`)) return
+    setBulkBusy(true)
+    setBulkError('')
+    setBulkResult(null)
+    try {
+      const res = await fetch('/api/clients/ares-types', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setBulkError(data.error ?? 'Doplnění se nezdařilo'); return }
+      setBulkResult({ updated: data.updated ?? 0, failed: data.failed ?? 0, names: data.failed_names ?? [] })
+      await loadClients()
+    } catch {
+      setBulkError('Doplnění se nezdařilo')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
   const icoLabel = country === 'CZ' ? 'IČO' : 'VAT ID / UID'
   const icoPlaceholder = country === 'CZ' ? '12345678' : (VAT_PLACEHOLDER[country] ?? '')
   const lookupBtnLabel = country === 'CZ' ? 'Hledat ARES' : 'Hledat VIES'
@@ -188,6 +219,31 @@ export default function ClientsPage() {
           </button>
         )}
       </div>
+
+      {isAdmin && (missingTypeCount > 0 || bulkResult || bulkError) && (
+        <div className="mb-4">
+          {missingTypeCount > 0 && (
+            <button
+              onClick={runBulk}
+              disabled={bulkBusy}
+              className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 hover:border-[#F04E12] hover:text-[#F04E12] disabled:opacity-50 transition-colors"
+            >
+              {bulkBusy ? 'Doplňuji…' : `Doplnit typ klientů z ARES (${missingTypeCount})`}
+            </button>
+          )}
+          {bulkError && <p className="text-red-500 text-sm mt-2">{bulkError}</p>}
+          {bulkResult && (
+            <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 text-sm p-3">
+              <p>Doplněno {bulkResult.updated}, nepodařilo se {bulkResult.failed}</p>
+              {bulkResult.names.length > 0 && (
+                <ul className="list-disc pl-5 mt-1 text-gray-600">
+                  {bulkResult.names.map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -363,13 +419,14 @@ export default function ClientsPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Typ klienta</label>
                   <select
                     value={form.entity_type}
-                    onChange={(e) => setForm((f) => ({ ...f, entity_type: e.target.value }))}
+                    onChange={(e) => { setTypeFromAres(false); setForm((f) => ({ ...f, entity_type: e.target.value })) }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                   >
                     <option value="">Neurčeno</option>
                     <option value="firma">Firma (s.r.o., a.s., spolek ...)</option>
                     <option value="osvc">OSVČ (fyzická osoba podnikající)</option>
                   </select>
+                  {typeFromAres && <p className="text-xs text-gray-500 mt-1">Určeno podle ARES</p>}
                 </div>
 
                 {form.entity_type === 'firma' && (

@@ -464,6 +464,11 @@ function PreviewModal({
               <ul className="list-disc pl-5">
                 {missing.map((k) => <li key={k}>{missingLabel(k)}</li>)}
               </ul>
+              {missing.includes('klient.entity_type') && (
+                <p className="mt-2">
+                  Typ klienta (firma, OSVČ): <Link href="/clients" className="underline font-medium">stránka Klienti</Link>. Typ se doplní u klienta, nejlépe tlačítkem z ARES.
+                </p>
+              )}
             </div>
           )}
           {missing && missing.length === 0 && (
