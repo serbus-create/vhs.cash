@@ -252,6 +252,10 @@ export default function OrderPage({
   const odhad = (tv.odhad_text ?? '').trim()
   const depositPct = (tv.zaloha_objednavka_procent ?? '40').trim()
   const noDeposit = depositPct === '0'
+  // záloha s DPH (jen pro plátce DPH), zaokrouhleno na haléře
+  const depositNum = Number(depositPct.replace(',', '.'))
+  const depositWithVatRaw = Number.isFinite(depositNum) ? Math.round(pricing.totalWithVat * depositNum) / 100 : 0
+  const depositWithVat = formatCzNumber(depositWithVatRaw, Number.isInteger(depositWithVatRaw) ? 0 : 2)
 
   return (
     <Page size="A4" style={styles.page}>
@@ -446,8 +450,8 @@ export default function OrderPage({
             <Text style={styles.priceLine}>Bez zálohy.</Text>
           ) : rezim === 'pevna' ? (
             <Text style={styles.priceLine}>
-              Záloha: {depositPct} % z ceny, tedy {zalohaCastka ?? ''} Kč bez DPH, splatná do 7 dnů od doručení
-              faktury
+              Záloha: {depositPct} % z ceny, tedy {zalohaCastka ?? ''} Kč
+              {showVat ? ` bez DPH (${depositWithVat} Kč s DPH)` : ''}, splatná do 7 dnů od doručení zálohové faktury.
             </Text>
           ) : (
             <Text style={styles.priceLine}>Záloha: {depositPct} % z výsledné ceny.</Text>
