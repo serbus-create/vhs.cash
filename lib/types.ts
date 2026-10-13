@@ -18,6 +18,7 @@ export interface CompanyProfile {
   profile_type: 'sro' | 'osvč'
   spisova_znacka: string | null
   represented_by?: string | null
+  default_hourly_rate?: number | null
   invoice_number_series: number
   created_at: string
 }

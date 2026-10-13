@@ -121,7 +121,14 @@ export default function OrderTermsSection({
               <input
                 type="checkbox"
                 checked={value.bezZalohy}
-                onChange={(e) => set({ bezZalohy: e.target.checked, zalohaTouched: true })}
+                onChange={(e) => {
+                  const zp = value.zalohaProcent.trim()
+                  set({
+                    bezZalohy: e.target.checked,
+                    zalohaTouched: true,
+                    ...(!e.target.checked && (zp === '' || zp === '0') ? { zalohaProcent: '40' } : {}),
+                  })
+                }}
                 disabled={disabled}
                 className="accent-[#F04E12]"
               />
