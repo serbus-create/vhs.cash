@@ -11,6 +11,24 @@ const esc = (s: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 
+/** Podpis Miloše Serbuse; sdílí e-mail k potvrzení i e-maily po potvrzení. */
+export const ORDER_SIGNATURE_TEXT = `Miloš Serbus
+Produkce | Strategie | Supervize
+Jednatel ve společnosti
+www.v-h-s.cz
+info@v-h-s.cz
++420 725 468 614`
+
+export const ORDER_SIGNATURE_HTML = `<p style="margin:0;"><strong>Miloš Serbus</strong></p>
+<p style="margin:0;">Produkce | Strategie | Supervize</p>
+<p style="margin:0 0 12px 0;">Jednatel ve společnosti</p>
+<p style="margin:0 0 12px 0;"><img src="${LOGO_URL}" width="150" alt="vhs." style="display:block;width:150px;height:auto;border:0;"></p>
+<p style="margin:0;"><a href="https://www.v-h-s.cz" style="color:#111111;">www.v-h-s.cz</a></p>
+<p style="margin:0;"><a href="mailto:info@v-h-s.cz" style="color:#111111;">info@v-h-s.cz</a></p>
+<p style="margin:0;"><a href="tel:+420725468614" style="color:#111111;">+420 725 468 614</a></p>`
+
+export const escapeHtml = esc
+
 export function buildOrderEmail({ docNumber, confirmUrl }: { docNumber: string; confirmUrl: string }): {
   subject: string
   html: string
@@ -33,12 +51,7 @@ Po potvrzení Vám zašlu kopii s potvrzením. Odkaz je platný 30 dnů.
 
 Děkuji a přeji hezký den
 
-Miloš Serbus
-Produkce | Strategie | Supervize
-Jednatel ve společnosti
-www.v-h-s.cz
-info@v-h-s.cz
-+420 725 468 614`
+${ORDER_SIGNATURE_TEXT}`
 
   const num = esc(docNumber)
   const url = esc(confirmUrl)
@@ -87,13 +100,7 @@ info@v-h-s.cz
 <p style="${p}">Po potvrzení Vám zašlu kopii s potvrzením. Odkaz je platný 30 dnů.</p>
 <p style="margin:0 0 20px 0;">Děkuji a přeji hezký den</p>
 
-<p style="margin:0;"><strong>Miloš Serbus</strong></p>
-<p style="margin:0;">Produkce | Strategie | Supervize</p>
-<p style="margin:0 0 12px 0;">Jednatel ve společnosti</p>
-<p style="margin:0 0 12px 0;"><img src="${LOGO_URL}" width="150" alt="vhs." style="display:block;width:150px;height:auto;border:0;"></p>
-<p style="margin:0;"><a href="https://www.v-h-s.cz" style="color:#111111;">www.v-h-s.cz</a></p>
-<p style="margin:0;"><a href="mailto:info@v-h-s.cz" style="color:#111111;">info@v-h-s.cz</a></p>
-<p style="margin:0;"><a href="tel:+420725468614" style="color:#111111;">+420 725 468 614</a></p>
+${ORDER_SIGNATURE_HTML}
 </td></tr>
 </table>
 </td></tr>

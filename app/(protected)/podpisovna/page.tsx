@@ -42,6 +42,22 @@ function ConfirmedBy({ doc }: { doc: Document }) {
     <div className="text-sm">
       <div className="text-[#111111]">{doc.confirmed_by_name ?? '—'}{doc.confirmed_by_role ? `, ${doc.confirmed_by_role}` : ''}</div>
       <div className="text-gray-500">{doc.confirmed_at ? fmtDateTime(doc.confirmed_at) : '—'}</div>
+      <div className="mt-1 text-xs text-gray-500">
+        Archiv:{' '}
+        {doc.archive_drive_file_id ? (
+          <a
+            href={`https://drive.google.com/file/d/${encodeURIComponent(doc.archive_drive_file_id)}/view`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#F04E12] hover:underline"
+          >
+            uložen v Disku
+          </a>
+        ) : 'čeká'}
+      </div>
+      <div className="text-xs text-gray-500">
+        E-maily: {doc.confirm_mail_sent_at ? `odeslány ${fmtDateTime(doc.confirm_mail_sent_at)}` : 'neodeslány'}
+      </div>
     </div>
   )
 }
@@ -144,6 +160,28 @@ export default function PodpisovnaPage() {
     load()
   }
 
+  const finalize = async (doc: Document) => {
+    setActionError(null)
+    setActionOk(null)
+    setSendingId(doc.id)
+    try {
+      const res = await fetch('/api/podpisovna/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId: doc.id }),
+      })
+      const b = await res.json().catch(() => ({}))
+      if (!res.ok) setActionError(b.error ?? 'Dokončení se nezdařilo')
+      else if (b.archived && b.mailed) setActionOk(`Potvrzení objednávky ${doc.number} je dokončeno`)
+      else setActionError(`Dokončení se nepodařilo celé (${(b.failed ?? []).join(', ') || 'zkuste to znovu'}). Potvrzení klienta zůstává platné.`)
+    } catch {
+      setActionError('Dokončení se nezdařilo')
+    } finally {
+      setSendingId(null)
+      load()
+    }
+  }
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {}
     for (const d of documents) c[displayStatus(d)] = (c[displayStatus(d)] ?? 0) + 1
@@ -186,6 +224,11 @@ export default function PodpisovnaPage() {
           >
             Stáhnout PDF
           </a>
+        )}
+        {ds === 'confirmed' && isAdmin && (!doc.archive_drive_file_id || !doc.confirm_mail_sent_at) && (
+          <button onClick={() => finalize(doc)} disabled={sendingId === doc.id} className={btnCls(sendingId !== doc.id)}>
+            {sendingId === doc.id ? 'Dokončuji…' : 'Dokončit potvrzení'}
+          </button>
         )}
       </div>
     )

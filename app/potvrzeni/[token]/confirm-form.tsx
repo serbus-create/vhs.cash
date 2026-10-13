@@ -56,6 +56,8 @@ export default function ConfirmForm({
       })
       const b = await res.json().catch(() => ({}))
       if (res.ok) {
+        // archiv a e-maily dokončí server, výsledek klientovi neukazujeme
+        fetch(`/api/potvrzeni/${encodeURIComponent(token)}/finalize`, { method: 'POST', keepalive: true }).catch(() => {})
         router.refresh()
         return // tlačítko zůstane vypnuté, stránka se obnoví do stavu potvrzeno
       }
