@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { hashToken, newToken, LINK_VALID_DAYS } from '@/lib/order-link'
 import { buildOrderTerms, loadOrderPdfInput } from '@/lib/pdf/generate-order'
 import { TERMS_TEMPLATE_VERSION } from '@/lib/terms/template'
+import { TERMS_DEFAULTS } from '@/lib/terms/defaults'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Supabase = SupabaseClient<any, any, any>
@@ -76,9 +77,16 @@ export async function createOrderLink({
 
   // Podmínky se sestaví z aktuálního stavu (u sent/expired se přebírá nový snapshot)
   const input = await loadOrderPdfInput(supabase, documentId)
-  const { result, missing } = buildOrderTerms(input)
+  const { result, missing, values } = buildOrderTerms(input)
   const snapshot = JSON.stringify(result)
   const termsHash = createHash('sha256').update(snapshot).digest('hex')
+
+  // Efektivní hodnoty podmínek (výchozí přepsané hodnotami objednávky), aby pozdější změna
+  // TERMS_DEFAULTS neměnila částky a lhůty, které klient potvrdil. Šablona klíč nepoužívá.
+  const effective: Record<string, string> = {}
+  for (const key of Object.keys(TERMS_DEFAULTS)) effective[key] = values[key] ?? TERMS_DEFAULTS[key]
+  if (values.zaloha_castka?.trim()) effective.zaloha_castka = values.zaloha_castka
+  effective.terms_version = TERMS_TEMPLATE_VERSION
 
   const token = newToken()
   const now = new Date()
@@ -93,7 +101,11 @@ export async function createOrderLink({
       status: 'sent',
       terms_snapshot: snapshot,
       terms_hash: termsHash,
-      terms_values: { ...(doc.terms_values ?? {}), terms_version: TERMS_TEMPLATE_VERSION },
+      terms_values: {
+        ...(doc.terms_values ?? {}),
+        terms_version: TERMS_TEMPLATE_VERSION,
+        terms_effective: JSON.stringify(effective),
+      },
       confirmed_at: null,
       confirmed_by_name: null,
       confirmed_by_role: null,

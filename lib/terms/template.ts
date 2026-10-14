@@ -13,7 +13,7 @@ export interface TermsArticle {
   clauses: TermsClause[]
 }
 
-export const TERMS_TEMPLATE_VERSION = '1.0'
+export const TERMS_TEMPLATE_VERSION = '1.1'
 
 export const TERMS_TITLE = 'Podmínky spolupráce'
 
@@ -120,7 +120,7 @@ export const TERMS_ARTICLES: TermsArticle[] = [
       },
       {
         id: '5.3',
-        text: 'Záloha je uvedena v objednávce, výchozí je {{zaloha_procent}} % pevné ceny ({{zaloha_castka}} Kč). Je splatná do {{zaloha_splatnost}} dnů od doručení faktury a práce začnou po jejím připsání na účet dodavatele. U hodinové sazby se záloha nevyžaduje, pokud objednávka neříká jinak.',
+        text: 'Výše zálohy je uvedena v objednávce. Není-li uvedena jinak, činí záloha {{zaloha_procent}} % pevné ceny ({{zaloha_castka}} Kč). Záloha je splatná do {{zaloha_splatnost}} dnů od doručení zálohové faktury a práce začnou po jejím připsání na účet dodavatele. U hodinové sazby a u zakázky bez ceny se záloha nevyžaduje, pokud objednávka neříká jinak.',
       },
       {
         id: '5.4',
@@ -138,23 +138,31 @@ export const TERMS_ARTICLES: TermsArticle[] = [
     clauses: [
       {
         id: '6.1',
-        text: 'Při prodlení klienta s platbou vzniká dodavateli nárok na zákonnou paušální náhradu nákladů spojených s uplatněním pohledávky podle § 3 nařízení vlády č. 351/2013 Sb., nyní {{zakonna_nahrada}} Kč za každou fakturu. Zaplatí-li klient nejpozději do 14 dnů po splatnosti, dodavatel ji neuplatní.',
+        text: 'Při prodlení klienta s platbou zasílá dodavatel e-mailové upomínky {{upominka_1}}., {{upominka_2}}., {{upominka_3}}. a {{upominka_4}}. den po splatnosti. Upomínka {{upominka_1}}. den je přátelské upozornění bez následků. Každá další upomínka uvádí dlužné částky a jejich právní základ.',
       },
       {
         id: '6.2',
-        text: 'Dodavatel odešle klientovi upomínky 7, 15 a 22 dnů po splatnosti. První je výzva bez poplatku. Druhá a třetí upomínka uvádí dlužnou částku včetně zákonné náhrady a jejího právního základu. Třetí upomínka je poslední výzva před předáním pohledávky k vymáhání.',
+        text: 'Není-li faktura uhrazena ani do {{upominka_2}}. dne po splatnosti, vzniká dodavateli nárok na smluvní pokutu {{poplatek_1}} Kč. Není-li dlužná částka uhrazena ani do {{upominka_3}}. dne po splatnosti, zvyšuje se smluvní pokuta o dalších {{poplatek_2}} Kč, tedy na celkem {{poplatek_celkem}} Kč.',
       },
       {
         id: '6.3',
-        text: 'Od 22. dne prodlení klient platí smluvní pokutu {{pokuta_prodleni}} % z dlužné částky za každý den prodlení. Pokuta nahrazuje zákonný úrok z prodlení a je splatná do 7 dnů od vyúčtování. Zaplacením smluvní pokuty není dotčen nárok dodavatele na náhradu škody.',
+        text: 'Není-li dlužná částka uhrazena ani do {{upominka_4}}. dne po splatnosti, vzniká dodavateli nárok i na zákonnou paušální náhradu nákladů spojených s uplatněním pohledávky podle § 3 nařízení vlády č. 351/2013 Sb., nyní {{zakonna_nahrada}} Kč za každou fakturu. Je-li dlužná částka uhrazena dříve, dodavatel ji neuplatní.',
       },
       {
         id: '6.4',
-        text: 'Po předání pohledávky k vymáhání může dodavatel požadovat i skutečné náklady vymáhání přesahující zákonnou paušální náhradu, doloží-li je.',
+        text: 'Od {{upominka_4}}. dne po splatnosti klient navíc platí smluvní pokutu {{pokuta_prodleni}} % z dlužné částky faktury (bez smluvních pokut a náhrad) za každý den prodlení. Pokuta nahrazuje zákonný úrok z prodlení a je splatná do {{splatnost_dny}} dnů od vyúčtování. Zaplacením smluvních pokut není dotčen nárok dodavatele na náhradu škody.',
       },
       {
         id: '6.5',
-        text: 'Je-li klient v prodlení déle než {{pozastaveni_dny}} dnů, může dodavatel pozastavit práce i předání výstupů a termíny se o tuto dobu prodlužují. Je-li v prodlení déle než {{odstoupeni_dny}} dnů, může dodavatel od zakázky odstoupit a vyúčtovat provedené práce.',
+        text: 'Je-li klient v prodlení déle než {{pozastaveni_dny}} dnů, může dodavatel pozastavit práce i předání výstupů. Od {{upominka_4}}. dne po splatnosti je pozastaví vždy. Termíny se o dobu pozastavení prodlužují. Je-li klient v prodlení déle než {{odstoupeni_dny}} dnů, může dodavatel od zakázky odstoupit a vyúčtovat provedené práce.',
+      },
+      {
+        id: '6.6',
+        text: 'Není-li dlužná částka včetně smluvních pokut a náhrady uhrazena do {{predani_dny}}. dne po splatnosti, předá dodavatel pohledávku právnímu zástupci k předžalobní výzvě a vymáhání. Klient hradí i skutečné náklady vymáhání, zejména právního zastoupení a soudní poplatky, přesahující zákonnou paušální náhradu, doloží-li je dodavatel.',
+      },
+      {
+        id: '6.7',
+        text: 'Smluvní pokuty a náhradu dodavatel vyúčtuje samostatným dokladem, který není fakturou. Doklad je splatný do {{splatnost_dny}} dnů od doručení a platí se samostatně pod vlastním variabilním symbolem.',
       },
     ],
   },
