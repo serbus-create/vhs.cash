@@ -51,6 +51,21 @@ export async function generateInvoicePdf(
     })
   }
 
+  // Faktura navázaná na potvrzenou objednávku: místo pokutové doložky odkaz na potvrzené podmínky
+  let termsOrder: { number: string; date: string } | null = null
+  if (doc.type === 'faktura' && doc.order_id) {
+    const { data: order } = await supabase
+      .from('documents')
+      .select('number, status, confirmed_at')
+      .eq('id', doc.order_id)
+      .eq('type', 'objednavka')
+      .single()
+    if (order?.status === 'confirmed' && order.confirmed_at) {
+      const date = new Intl.DateTimeFormat('cs-CZ', { timeZone: 'Europe/Prague' }).format(new Date(order.confirmed_at))
+      termsOrder = { number: order.number as string, date }
+    }
+  }
+
   const buffer: Buffer = await renderToBuffer(
     React.createElement(InvoiceTemplate, {
       doc: doc as DocumentWithItems,
@@ -58,6 +73,7 @@ export async function generateInvoicePdf(
       companyProfile,
       qrCodeUrl,
       clientCountry: client?.country ?? null,
+      termsOrder,
     }) as unknown as React.ReactElement
   )
 

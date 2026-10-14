@@ -48,7 +48,7 @@ export interface Client {
   created_at: string
 }
 
-export type DocumentType = 'faktura' | 'nabidka' | 'objednavka' | 'podminky'
+export type DocumentType = 'faktura' | 'nabidka' | 'objednavka' | 'podminky' | 'vyuctovani'
 export type DocumentStatus = 'draft' | 'issued' | 'sent' | 'paid' | 'overdue' | 'cancelled' | 'confirmed' | 'expired'
 
 export interface Document {
@@ -74,6 +74,8 @@ export interface Document {
   discount_note: string | null
   contact_name?: string | null
   contact_email?: string | null
+  order_id?: string | null
+  related_invoice_id?: string | null
   terms_template_id?: string | null
   terms_values?: Record<string, string> | null
   terms_snapshot?: string | null

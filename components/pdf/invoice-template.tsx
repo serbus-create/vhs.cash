@@ -301,9 +301,11 @@ interface Props {
   companyProfile: CompanyProfile | null
   qrCodeUrl: string | null
   clientCountry?: string | null
+  /** potvrzená objednávka s podmínkami; nahrazuje pokutovou doložku */
+  termsOrder?: { number: string; date: string } | null
 }
 
-export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl, clientCountry }: Props) {
+export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl, clientCountry, termsOrder }: Props) {
   // Language and locale derived from client's country
   const country = clientCountry ?? client?.country ?? null
   const lang = getLang(country)
@@ -565,7 +567,11 @@ export default function InvoiceTemplate({ doc, client, companyProfile, qrCodeUrl
         {/* ── Penalty clause (invoices only) ── */}
         {doc.type === 'faktura' && (
           <View style={[styles.textBlock, { marginTop: 6 }]}>
-            <Text style={styles.penaltyText}>{t.penalty}</Text>
+            <Text style={styles.penaltyText}>
+              {termsOrder
+                ? t.penaltyOrderRef.replace('{number}', termsOrder.number).replace('{date}', termsOrder.date)
+                : t.penalty}
+            </Text>
           </View>
         )}
 

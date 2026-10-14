@@ -37,6 +37,8 @@ export interface InvoiceTranslations {
   // Long text blocks
   note: string
   penalty: string
+  /** náhrada pokutové doložky u faktury navázané na potvrzenou objednávku; {number}, {date} */
+  penaltyOrderRef: string
   // Payment box
   platebniUdaje: string
   cisloUctu: string
@@ -78,6 +80,7 @@ const cs: InvoiceTranslations = {
   celkemKUhrade: 'Celkem k úhradě',
   note: 'Fakturujeme Vám za dodané zboží či služby. Děkujeme za Vámi projevenou důvěru a těšíme se na další projekty.',
   penalty: 'Při zpožděné úhradě Vám budeme účtovat penále ve výši 0,05 % z dlužné částky za každý započatý den prodlení. Při prodlení nad 21 dnů se sazba zvyšuje na 0,1 %.',
+  penaltyOrderRef: 'Při prodlení s úhradou se postupuje podle podmínek spolupráce potvrzených v objednávce č. {number} dne {date}.',
   platebniUdaje: 'Platební údaje',
   cisloUctu: 'Číslo účtu',
   variabilniSymbol: 'Variabilní symbol',
@@ -117,6 +120,7 @@ const sk: InvoiceTranslations = {
   celkemKUhrade: 'Celkom k úhrade',
   note: 'Fakturujeme Vám za dodaný tovar alebo služby. Ďakujeme za prejavenú dôveru a tešíme sa na ďalšie projekty.',
   penalty: 'Pri oneskorenom uhradení Vám budeme účtovať penále vo výške 0,05 % z dlžnej sumy za každý začatý deň omeškania. Pri omeškaní nad 21 dní sa sadzba zvyšuje na 0,1 %.',
+  penaltyOrderRef: 'Pri omeškaní s úhradou sa postupuje podľa podmienok spolupráce potvrdených v objednávke č. {number} dňa {date}.',
   platebniUdaje: 'Platobné údaje',
   cisloUctu: 'Číslo účtu',
   variabilniSymbol: 'Variabilný symbol',
@@ -156,6 +160,7 @@ const de: InvoiceTranslations = {
   celkemKUhrade: 'Gesamtbetrag',
   note: 'Wir stellen Ihnen die gelieferten Waren und Dienstleistungen in Rechnung. Vielen Dank für Ihr Vertrauen – wir freuen uns auf weitere gemeinsame Projekte.',
   penalty: 'Bei verspäteter Zahlung berechnen wir eine Verzugspauschale von 0,05 % des ausstehenden Betrags pro angefangenem Verzugstag. Bei einem Verzug von über 21 Tagen erhöht sich der Satz auf 0,1 %.',
+  penaltyOrderRef: 'Bei Zahlungsverzug gelten die in der Bestellung Nr. {number} am {date} bestätigten Kooperationsbedingungen.',
   platebniUdaje: 'Zahlungsinformationen',
   cisloUctu: 'Kontonummer',
   variabilniSymbol: 'Verwendungszweck',
@@ -195,6 +200,7 @@ const pl: InvoiceTranslations = {
   celkemKUhrade: 'Razem do zapłaty',
   note: 'Wystawiamy Państwu fakturę za dostarczone towary lub usługi. Dziękujemy za okazane zaufanie i liczymy na dalszą współpracę.',
   penalty: 'W przypadku opóźnienia płatności naliczamy odsetki w wysokości 0,05 % kwoty należnej za każdy rozpoczęty dzień zwłoki. W przypadku opóźnienia powyżej 21 dni stawka wzrasta do 0,1 %.',
+  penaltyOrderRef: 'W przypadku opóźnienia w płatności stosuje się warunki współpracy potwierdzone w zamówieniu nr {number} w dniu {date}.',
   platebniUdaje: 'Dane płatnicze',
   cisloUctu: 'Numer konta',
   variabilniSymbol: 'Tytuł przelewu',

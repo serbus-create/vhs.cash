@@ -299,7 +299,9 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                     className="p-4 hover:bg-orange-50/40 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <span className="font-semibold text-[#F04E12] text-sm">{doc.number}</span>
+                      <span className="font-semibold text-[#F04E12] text-sm">{doc.number}{doc.type === 'faktura' && doc.order_id && (
+                          <span title="Navázáno na potvrzenou objednávku" className="ml-1.5 inline-flex px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px] font-medium align-middle">Podmínky</span>
+                        )}</span>
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ds] ?? 'bg-gray-100 text-gray-600'}`}>
                         {STATUS_LABELS[ds] ?? doc.status}
                       </span>
@@ -370,7 +372,9 @@ export default function DocumentsList({ type }: { type: Extract<DocumentType, 'f
                   onClick={() => router.push(`/documents/${doc.id}`)}
                   className="hover:bg-orange-50/40 transition-colors cursor-pointer"
                 >
-                  <td className="px-6 py-3.5 font-medium text-[#F04E12]">{doc.number}</td>
+                  <td className="px-6 py-3.5 font-medium text-[#F04E12]">{doc.number}{doc.type === 'faktura' && doc.order_id && (
+                          <span title="Navázáno na potvrzenou objednávku" className="ml-2 inline-flex px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px] font-medium align-middle">Podmínky</span>
+                        )}</td>
                   <td className="px-6 py-3.5 text-gray-700">{(doc.clients as any)?.name ?? '—'}</td>
                   <td className="px-6 py-3.5">
                     {(doc as any).company_profiles ? (

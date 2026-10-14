@@ -7,6 +7,7 @@ import type { Client, CompanyProfile, DocumentItem, DocumentStatus, DocumentType
 import { formatCurrency, TYPE_LABELS, STATUS_LABELS, calcDocumentTotals } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
 import OrderTermsSection from '@/components/order-terms-section'
+import OrderLinkSelect from '@/components/order-link-select'
 import { applyClientContact, initialOrderTerms, parseOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload, missingLabel } from '@/lib/order-terms'
 
 interface LineItem {
@@ -65,6 +66,7 @@ export default function EditDocumentPage() {
   const [docDiscountNote, setDocDiscountNote] = useState('')
   const [hasExchangeRate, setHasExchangeRate] = useState(false)
   const [paidAmount, setPaidAmount] = useState<number | null>(null)
+  const [orderId, setOrderId] = useState('')
   const [orderTerms, setOrderTerms] = useState(initialOrderTerms)
   const [existingTermsValues, setExistingTermsValues] = useState<Record<string, string> | null>(null)
   const [saving, setSaving] = useState(false)
@@ -120,6 +122,7 @@ export default function EditDocumentPage() {
       setDocDiscountNote(doc.discount_note ?? '')
       setHasExchangeRate(doc.exchange_rate != null)
       setPaidAmount(doc.paid_amount ?? null)
+      setOrderId(doc.order_id ?? '')
       setOrderTerms(parseOrderTerms(doc))
       setExistingTermsValues(doc.terms_values ?? null)
 
@@ -210,6 +213,7 @@ export default function EditDocumentPage() {
         discount_percent: priced ? docDiscountPercent : 0,
         discount_note: priced ? (docDiscountNote || null) : null,
         paid_amount: paidAmount,
+        ...(docType === 'faktura' ? { order_id: orderId || null } : {}),
         ...(isOrder ? buildOrderTermsPayload(orderTerms, existingTermsValues) : {}),
         ...exchangeFields,
       })
@@ -289,6 +293,18 @@ export default function EditDocumentPage() {
     return (
       <div className="p-8">
         <p className="text-gray-500">Dokument nenalezen.</p>
+        <button onClick={() => router.push(backHref)} className="text-[#F04E12] mt-2 text-sm hover:underline">
+          ← Zpět na seznam
+        </button>
+      </div>
+    )
+  }
+
+  // Vyúčtování vzniká systémově (upomínky); tady se neupravuje ani nepřepíná jeho typ
+  if (docType === 'vyuctovani') {
+    return (
+      <div className="p-8">
+        <p className="text-gray-500">{number} · {TYPE_LABELS.vyuctovani}: tento doklad vzniká systémově a nejde zde upravit.</p>
         <button onClick={() => router.push(backHref)} className="text-[#F04E12] mt-2 text-sm hover:underline">
           ← Zpět na seznam
         </button>
@@ -514,6 +530,17 @@ export default function EditDocumentPage() {
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                   />
                 </div>
+
+                <OrderLinkSelect
+                  workspaceId={workspaceId}
+                  clientId={clientId}
+                  value={orderId}
+                  disabled={isReadOnly || status === 'paid' || status === 'cancelled'}
+                  onChange={(id, order) => {
+                    setOrderId(id)
+                    if (order && !clientId && order.client_id) setClientId(order.client_id)
+                  }}
+                />
               </>
             )}
           </div>

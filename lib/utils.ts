@@ -34,6 +34,7 @@ export const TYPE_LABELS: Record<string, string> = {
   nabidka: 'Cenová nabídka',
   objednavka: 'Objednávka',
   podminky: 'Podmínky spolupráce',
+  vyuctovani: 'Vyúčtování',
 }
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -62,6 +63,7 @@ export const TYPE_PREFIX: Record<string, string> = {
   faktura: 'FA',
   nabidka: 'CN',
   objednavka: 'OB',
+  vyuctovani: 'VY',
 }
 
 export interface LineItemForCalc {

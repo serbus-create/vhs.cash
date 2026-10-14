@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useUserRole } from '@/lib/useUserRole'
 import type { Client, CompanyProfile } from '@/lib/types'
 import { formatCurrency, TYPE_PREFIX, calcDocumentTotals } from '@/lib/utils'
+import OrderLinkSelect from '@/components/order-link-select'
 import OrderTermsSection from '@/components/order-terms-section'
 import { applyClientContact, initialOrderTerms, isPriced, validateOrderTerms, buildOrderTermsPayload } from '@/lib/order-terms'
 
@@ -42,6 +43,7 @@ function NewDocumentForm() {
   const [docType, setDocType] = useState<'faktura' | 'nabidka' | 'objednavka'>(initialType)
   const [number, setNumber] = useState('')
   const [clientId, setClientId] = useState('')
+  const [orderId, setOrderId] = useState('')
   const [subject, setSubject] = useState('')
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState(() => {
@@ -195,6 +197,7 @@ function NewDocumentForm() {
         due_date: docType === 'faktura' ? dueDate : null,
         tax_date: (docType === 'faktura' && isSro) ? taxDate : null,
         variable_symbol: variableSymbol || null,
+        ...(docType === 'faktura' && orderId ? { order_id: orderId } : {}),
         status,
         currency,
         total_without_vat: Math.round(totalWithoutVat * 100) / 100,
@@ -397,6 +400,16 @@ function NewDocumentForm() {
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
                   />
                 </div>
+
+                <OrderLinkSelect
+                  workspaceId={workspaceId}
+                  clientId={clientId}
+                  value={orderId}
+                  onChange={(id, order) => {
+                    setOrderId(id)
+                    if (order && !clientId && order.client_id) setClientId(order.client_id)
+                  }}
+                />
               </>
             )}
 
