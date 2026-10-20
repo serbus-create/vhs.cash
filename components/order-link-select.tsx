@@ -52,7 +52,7 @@ export default function OrderLinkSelect({ workspaceId, clientId, value, onChange
   )
   const selected = orders.find((o) => o.id === value) ?? null
 
-  let info = 'Bez potvrzených podmínek: upomínky půjdou bez smluvních pokut'
+  let info = 'Bez potvrzených podmínek: upomínky se posílají ručně po staru (Upomínky, Faktury bez objednávky), bez smluvních pokut'
   if (selected) {
     const version = readEffectiveTerms(selected.terms_values).version
     info = `Podmínky${version ? ` v${version}` : ''} potvrzeny ${formatDate(selected.confirmed_at)}; při prodlení se účtují smluvní pokuty podle čl. 6`

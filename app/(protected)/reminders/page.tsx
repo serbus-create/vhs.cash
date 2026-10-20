@@ -211,7 +211,7 @@ export default function RemindersQueuePage() {
           <p className="text-gray-500 text-sm mt-1">Fronta ke schválení: nic se neodešle bez vašeho potvrzení.</p>
         </div>
         <Link href="/reminders/manual" className="text-sm text-[#F04E12] hover:underline shrink-0">
-          Starší faktury (ruční upomínky)
+          Faktury bez objednávky a starší (ruční upomínky)
         </Link>
       </div>
 
@@ -232,6 +232,9 @@ export default function RemindersQueuePage() {
           </button>
         ))}
       </div>
+      <p className="text-xs text-gray-400 -mt-3">
+        Ve frontě jsou faktury navázané na objednávku s podmínkami. Ostatní faktury se upomínají ručně v části Faktury bez objednávky.
+      </p>
 
       {loading ? (
         <div className="py-20 text-center text-gray-400 text-sm">Načítám…</div>

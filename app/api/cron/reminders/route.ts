@@ -57,6 +57,25 @@ type Admin = ReturnType<typeof createAdminClient>
 type Totals = { created: number; superseded: number; skippedPaid: number; skippedCancelled: number }
 
 async function processWorkspace(admin: Admin, workspaceId: string, today: string, startDate: string, totals: Totals) {
+  // 0) pending události faktur bez objednávky nepatří do fronty (řeší se ručně na /reminders/manual)
+  const { data: pendingAll } = await admin
+    .from('reminder_events')
+    .select('invoice_id')
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'pending')
+  const pendingAllIds = Array.from(new Set((pendingAll ?? []).map((e) => e.invoice_id as string)))
+  if (pendingAllIds.length) {
+    const { data: noOrder } = await admin.from('documents').select('id').in('id', pendingAllIds).is('order_id', null)
+    const noOrderIds = (noOrder ?? []).map((d) => d.id as string)
+    if (noOrderIds.length) {
+      await admin
+        .from('reminder_events')
+        .update({ status: 'skipped', skip_reason: 'no_order', updated_at: new Date().toISOString() })
+        .in('invoice_id', noOrderIds)
+        .eq('status', 'pending')
+    }
+  }
+
   // 1) pending události faktur, které mezitím byly zaplaceny nebo zrušeny
   const { data: pending } = await admin
     .from('reminder_events')
@@ -93,6 +112,7 @@ async function processWorkspace(admin: Admin, workspaceId: string, today: string
     .eq('type', 'faktura')
     .not('status', 'in', '("paid","cancelled","draft")')
     .not('due_date', 'is', null)
+    .not('order_id', 'is', null)
     .gte('due_date', startDate)
     .lt('due_date', today)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

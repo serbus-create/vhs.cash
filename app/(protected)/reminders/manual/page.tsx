@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
 import { daysBetween, todayPrague } from '@/lib/reminders/schedule'
@@ -27,6 +28,7 @@ interface OverdueDoc {
   variable_symbol: string | null
   paid_amount: number | null
   company_profile_id: string | null
+  order_id: string | null
   clients: { name: string; email: string | null; country: string | null } | null
   last_reminder: { sentAt: string; level: number } | null
 }
@@ -140,6 +142,7 @@ export default function RemindersPage() {
   const [modal, setModal] = useState<ModalState | null>(null)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
+  const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set())
   const [sentIds, setSentIds] = useState<Record<string, { sentAt: string; level: number }>>({})
 
   useEffect(() => {
@@ -150,7 +153,7 @@ export default function RemindersPage() {
 
       const { data: documents } = await supabase
         .from('documents')
-        .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, paid_amount, company_profile_id, clients(name, email, country)')
+        .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, paid_amount, company_profile_id, order_id, clients(name, email, country)')
         .eq('workspace_id', workspaceId)
         .eq('type', 'faktura')
         .not('status', 'in', '("paid","cancelled","draft")')
@@ -171,6 +174,19 @@ export default function RemindersPage() {
         .in('document_id', docIds)
         .order('sent_at', { ascending: false })
 
+      // faktury s objednávkou, které mají událost ve frontě upomínek
+      const orderDocIds = documents.filter((d) => d.order_id).map((d) => d.id)
+      const queued = new Set<string>()
+      if (orderDocIds.length) {
+        const { data: evs } = await supabase
+          .from('reminder_events')
+          .select('invoice_id')
+          .eq('workspace_id', workspaceId)
+          .in('invoice_id', orderDocIds)
+        for (const e of evs ?? []) queued.add(e.invoice_id as string)
+      }
+      setQueuedIds(queued)
+
       const lastReminderMap: Record<string, { sentAt: string; level: number }> = {}
       for (const r of reminders ?? []) {
         if (!lastReminderMap[r.document_id]) {
@@ -188,6 +204,7 @@ export default function RemindersPage() {
         variable_symbol: d.variable_symbol ?? null,
         paid_amount: d.paid_amount ?? null,
         company_profile_id: d.company_profile_id ?? null,
+        order_id: d.order_id ?? null,
         clients: (Array.isArray(d.clients) ? d.clients[0] : d.clients) as { name: string; email: string | null; country: string | null } | null,
         last_reminder: lastReminderMap[d.id] ?? null,
       }))
@@ -274,6 +291,12 @@ export default function RemindersPage() {
     const recipientEmail = modal.doc.clients?.email
     if (!recipientEmail) {
       setSendError('Klient nemá zadaný e-mail.')
+      return
+    }
+    if (
+      queuedIds.has(modal.doc.id) &&
+      !window.confirm('Tato faktura je v nové frontě upomínek (podmínky spolupráce). Opravdu poslat ručně po staru, bez smluvních pokut?')
+    ) {
       return
     }
     setSending(true)
@@ -373,6 +396,9 @@ export default function RemindersPage() {
                         </div>
                         <p className="text-sm font-medium text-[#111111]">{doc.clients?.name ?? '—'}</p>
                         {noEmail && <p className="text-xs text-amber-600 mt-0.5">Chybí e-mail klienta</p>}
+                        {queuedIds.has(doc.id) && (
+                          <Link href="/reminders" className="inline-block text-xs text-blue-600 hover:underline mt-0.5">Řeší fronta upomínek</Link>
+                        )}
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-sm font-bold text-[#111111]">{formatCurrency(remaining)}</span>
                           <span className="text-xs text-gray-400">Spl. {formatDate(doc.due_date)}</span>
@@ -424,6 +450,9 @@ export default function RemindersPage() {
                             <div className="text-gray-700">{doc.clients?.name ?? '—'}</div>
                             {noEmail && (
                               <div className="text-xs text-amber-600 mt-0.5">Chybí e-mail klienta</div>
+                            )}
+                            {queuedIds.has(doc.id) && (
+                              <Link href="/reminders" className="inline-block text-xs text-blue-600 hover:underline mt-0.5">Řeší fronta upomínek</Link>
                             )}
                           </td>
                           <td className="px-6 py-3.5 text-gray-500 whitespace-nowrap">{formatDate(doc.due_date)}</td>
