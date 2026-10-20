@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createClient } from '@/lib/supabase/server'
 import { getWorkspaceContext } from '@/lib/workspace'
+import { daysBetween, todayPrague } from '@/lib/reminders/schedule'
 import { getReminderHtml, getLang, type ReminderLevel } from '@/lib/reminder-email'
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://vhs-cash.vercel.app'
@@ -51,9 +52,7 @@ export async function POST(req: NextRequest) {
 
     const amount = (doc.amount_czk ?? doc.total_with_vat) as number
     const paidAmount = (doc.paid_amount as number | null) ?? null
-    const daysOverdue = doc.due_date
-      ? Math.floor((Date.now() - new Date(doc.due_date).getTime()) / 86_400_000)
-      : 0
+    const daysOverdue = doc.due_date ? daysBetween(doc.due_date as string, todayPrague()) : 0
 
     let companyProfile: { name: string; bank_account: string | null; iban: string | null; swift: string | null } | null = null
     if (doc.company_profile_id) {

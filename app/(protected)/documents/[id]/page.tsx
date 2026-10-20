@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import InvoiceRemindersInfo from '@/components/invoice-reminders-info'
 import { createClient } from '@/lib/supabase/client'
 import type { Client, CompanyProfile, DocumentItem, DocumentStatus, DocumentType } from '@/lib/types'
 import { formatCurrency, TYPE_LABELS, STATUS_LABELS, calcDocumentTotals } from '@/lib/utils'
@@ -353,6 +354,8 @@ export default function EditDocumentPage() {
           <button onClick={() => setPdfError('')} className="shrink-0 text-red-400 hover:text-red-600">✕</button>
         </div>
       )}
+
+      {docType === 'faktura' && <InvoiceRemindersInfo invoiceId={docId} workspaceId={workspaceId} />}
 
       {pdfMissing.length > 0 && (
         <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm px-4 py-3 rounded-lg flex items-start justify-between gap-3">

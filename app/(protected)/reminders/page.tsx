@@ -1,724 +1,474 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useUserRole } from '@/lib/useUserRole'
-import {
-  getReminderSubject,
-  getReminderBodyText,
-  getReminderLabels,
-  getLang,
-  type ReminderLevel,
-  type Lang,
-  type ReminderLabels,
-} from '@/lib/reminder-email'
+import { daysBetween, todayPrague } from '@/lib/reminders/schedule'
+import { REMINDER_FROM, REMINDER_REPLY_TO } from '@/lib/reminders/config'
+import type { ReminderPlan } from '@/lib/reminders/plan'
 
-// ---------- types ----------
+type Tab = 'queue' | 'sent' | 'skipped' | 'fees'
+type EventTab = Exclude<Tab, 'fees'>
 
-interface OverdueDoc {
+interface FeeRow {
   id: string
   number: string
+  subject: string | null
+  total_with_vat: number | null
+  issue_date: string | null
+  due_date: string | null
+  status: 'issued' | 'sent' | 'paid' | 'cancelled'
+  related_invoice_id: string | null
+  invoice: { number: string } | { number: string }[] | null
+  clients: { name: string } | { name: string }[] | null
+}
+
+const FEE_STATUS: Record<FeeRow['status'], { label: string; cls: string }> = {
+  issued: { label: 'Vystaveno', cls: 'bg-gray-200 text-gray-700' },
+  sent: { label: 'Odesláno', cls: 'bg-blue-100 text-blue-700' },
+  paid: { label: 'Zaplaceno', cls: 'bg-green-100 text-green-700' },
+  cancelled: { label: 'Stornováno', cls: 'bg-red-100 text-red-700' },
+}
+const firstOf = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null)
+
+interface EventRow {
+  id: string
+  invoice_id: string
+  milestone: number
   due_date: string
-  amount_czk: number | null
-  total_with_vat: number
-  currency: string
-  variable_symbol: string | null
-  paid_amount: number | null
-  company_profile_id: string | null
-  clients: { name: string; email: string | null; country: string | null } | null
-  last_reminder: { sent_at: string; level: number } | null
+  scheduled_for: string
+  status: 'pending' | 'sending' | 'sent' | 'skipped' | 'failed'
+  plan: ReminderPlan | null
+  subject: string | null
+  body_text: string | null
+  body_html: string | null
+  recipient_email: string | null
+  skip_reason: string | null
+  sent_at: string | null
+  error: string | null
+  invoice: { number: string; clients: { name: string } | { name: string }[] | null } | null
 }
 
-interface PaymentInfo {
-  bankAccount: string | null
-  iban: string | null
-  swift: string | null
-  companyName: string
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'queue', label: 'Ke schválení' },
+  { id: 'sent', label: 'Odesláno' },
+  { id: 'skipped', label: 'Přeskočeno' },
+  { id: 'fees', label: 'Poplatky' },
+]
+
+const tabOf = (s: EventRow['status']): EventTab =>
+  s === 'sent' ? 'sent' : s === 'skipped' ? 'skipped' : 'queue'
+
+const clientName = (e: EventRow) => {
+  const c = e.invoice?.clients
+  return (Array.isArray(c) ? c[0]?.name : c?.name) ?? '—'
 }
 
-interface ModalState {
-  doc: OverdueDoc
-  level: ReminderLevel
-  lang: Lang
-  labels: ReminderLabels
-  subject: string
-  bodyText: string
-  replyTo: string
-  qrCodeUrl: string | null
-  paymentInfo: PaymentInfo | null
-  qrLoading: boolean
-}
-
-// ---------- helpers ----------
-
-function daysOverdue(dueDate: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.floor((today.getTime() - new Date(dueDate).getTime()) / 86_400_000)
-}
-
-function reminderLevel(days: number): ReminderLevel {
-  if (days >= 30) return 3
-  if (days >= 15) return 2
-  return 1
-}
-
-const LEVEL_CONFIG: Record<ReminderLevel, { label: string; color: string; badgeClass: string; sectionBg: string }> = {
-  1: {
-    label: 'Nedávno po splatnosti',
-    color: '#F59E0B',
-    badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200',
-    sectionBg: 'border-amber-200',
-  },
-  2: {
-    label: 'Výrazně po splatnosti',
-    color: '#F04E12',
-    badgeClass: 'bg-orange-50 text-[#F04E12] border border-orange-200',
-    sectionBg: 'border-orange-200',
-  },
-  3: {
-    label: 'Vážně po splatnosti',
-    color: '#DC2626',
-    badgeClass: 'bg-red-50 text-red-700 border border-red-200',
-    sectionBg: 'border-red-200',
-  },
-}
-
-const LEVEL_RANGE: Record<ReminderLevel, string> = {
-  1: '1–14 dní',
-  2: '15–29 dní',
-  3: '30+ dní',
-}
-
-function levelBadge(level: ReminderLevel) {
-  const cfg = LEVEL_CONFIG[level]
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badgeClass}`}>
-      {LEVEL_RANGE[level]}
-    </span>
-  )
-}
-
-async function fetchQrCode(params: {
-  number: string
-  total_with_vat: number
-  currency: string
-  variable_symbol: string | null
-  iban: string
-  swift: string | null
-  companyName: string
-}): Promise<string | null> {
-  try {
-    const res = await fetch('/api/qr', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    })
-    const { url } = await res.json()
-    return url ?? null
-  } catch {
-    return null
-  }
-}
-
-// ---------- main component ----------
-
-export default function RemindersPage() {
+export default function RemindersQueuePage() {
   const supabase = createClient()
   const { role, workspaceId } = useUserRole()
   const isAdmin = role === 'admin'
-  const [docs, setDocs] = useState<OverdueDoc[]>([])
+  const [events, setEvents] = useState<EventRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<ModalState | null>(null)
-  const [sending, setSending] = useState(false)
-  const [sendError, setSendError] = useState('')
-  const [sentIds, setSentIds] = useState<Record<string, { sentAt: string; level: number }>>({})
+  const [tab, setTab] = useState<Tab>('queue')
+  const [preview, setPreview] = useState<EventRow | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  const [fees, setFees] = useState<FeeRow[]>([])
+  const [paidDialog, setPaidDialog] = useState<{ fee: FeeRow; date: string } | null>(null)
+  const [waiveDialog, setWaiveDialog] = useState<FeeRow | null>(null)
+  const today = todayPrague()
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!workspaceId) return
-    async function load() {
-      setLoading(true)
-      const today = new Date().toISOString().split('T')[0]
-
-      const { data: documents } = await supabase
-        .from('documents')
-        .select('id, number, due_date, amount_czk, total_with_vat, currency, variable_symbol, paid_amount, company_profile_id, clients(name, email, country)')
-        .eq('workspace_id', workspaceId)
-        .eq('type', 'faktura')
-        .not('status', 'in', '("paid","cancelled","draft")')
-        .lt('due_date', today)
-        .order('due_date', { ascending: true })
-
-      if (!documents?.length) {
-        setDocs([])
-        setLoading(false)
-        return
-      }
-
-      const docIds = documents.map((d) => d.id)
-
-      const { data: reminders } = await supabase
-        .from('reminders')
-        .select('document_id, sent_at, level')
-        .in('document_id', docIds)
-        .order('sent_at', { ascending: false })
-
-      const lastReminderMap: Record<string, { sent_at: string; level: number }> = {}
-      for (const r of reminders ?? []) {
-        if (!lastReminderMap[r.document_id]) {
-          lastReminderMap[r.document_id] = { sent_at: r.sent_at, level: r.level }
-        }
-      }
-
-      const result: OverdueDoc[] = documents.map((d) => ({
-        id: d.id,
-        number: d.number,
-        due_date: d.due_date,
-        amount_czk: d.amount_czk,
-        total_with_vat: d.total_with_vat,
-        currency: d.currency,
-        variable_symbol: d.variable_symbol ?? null,
-        paid_amount: d.paid_amount ?? null,
-        company_profile_id: d.company_profile_id ?? null,
-        clients: (Array.isArray(d.clients) ? d.clients[0] : d.clients) as { name: string; email: string | null; country: string | null } | null,
-        last_reminder: lastReminderMap[d.id] ?? null,
-      }))
-
-      setDocs(result)
-      setLoading(false)
-    }
-    load()
+    setLoading(true)
+    const { data } = await supabase
+      .from('reminder_events')
+      .select('*, invoice:documents!invoice_id(number, clients(name))')
+      .eq('workspace_id', workspaceId)
+      .neq('status', 'sending')
+      .order('scheduled_for', { ascending: true })
+    setEvents((data ?? []) as unknown as EventRow[])
+    const { data: feeData } = await supabase
+      .from('documents')
+      .select('id, number, subject, total_with_vat, issue_date, due_date, status, related_invoice_id, invoice:documents!related_invoice_id(number), clients(name)')
+      .eq('workspace_id', workspaceId)
+      .eq('type', 'vyuctovani')
+      .order('created_at', { ascending: false })
+    setFees((feeData ?? []) as unknown as FeeRow[])
+    setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId])
 
-  const grouped = useMemo(() => {
-    const byLevel: Record<ReminderLevel, OverdueDoc[]> = { 1: [], 2: [], 3: [] }
-    for (const doc of docs) {
-      const days = daysOverdue(doc.due_date)
-      const lvl = reminderLevel(days)
-      byLevel[lvl].push(doc)
-    }
-    return byLevel
-  }, [docs])
+  useEffect(() => { load() }, [load])
 
-  const openModal = async (doc: OverdueDoc) => {
-    const days = daysOverdue(doc.due_date)
-    const level = reminderLevel(days)
-    const lang = getLang(doc.clients?.country)
-    const labels = getReminderLabels(lang)
-    const amount = doc.amount_czk ?? doc.total_with_vat
-    const vars = { number: doc.number, daysOverdue: days, amount, dueDate: doc.due_date, paidAmount: doc.paid_amount ?? null }
+  const counts = useMemo(() => {
+    const c: Record<Tab, number> = { queue: 0, sent: 0, skipped: 0, fees: fees.length }
+    for (const e of events) c[tabOf(e.status)] += 1
+    return c
+  }, [events, fees])
+  const visible = tab === 'fees' ? [] : events.filter((e) => tabOf(e.status) === tab)
 
-    setModal({
-      doc,
-      level,
-      lang,
-      labels,
-      subject: getReminderSubject(level, vars, lang),
-      bodyText: getReminderBodyText(level, vars, lang),
-      replyTo: 'info@v-h-s.cz',
-      qrCodeUrl: null,
-      paymentInfo: null,
-      qrLoading: true,
-    })
-    setSendError('')
-
-    if (doc.company_profile_id) {
-      const { data: profile } = await supabase
-        .from('company_profiles')
-        .select('name, bank_account, iban, swift')
-        .eq('id', doc.company_profile_id)
-        .single()
-
-      if (profile) {
-        const paymentInfo: PaymentInfo = {
-          bankAccount: profile.bank_account ?? null,
-          iban: profile.iban ?? null,
-          swift: profile.swift ?? null,
-          companyName: profile.name ?? '',
-        }
-
-        let qrCodeUrl: string | null = null
-        if (profile.iban) {
-          const remainingForQr = doc.currency === 'CZK' && doc.paid_amount
-            ? Math.max(0, doc.total_with_vat - doc.paid_amount)
-            : doc.total_with_vat
-          qrCodeUrl = await fetchQrCode({
-            number: doc.number,
-            total_with_vat: remainingForQr,
-            currency: doc.currency ?? 'CZK',
-            variable_symbol: doc.variable_symbol,
-            iban: profile.iban,
-            swift: profile.swift ?? null,
-            companyName: profile.name ?? '',
-          })
-        }
-
-        setModal((prev) => prev ? { ...prev, qrCodeUrl, paymentInfo, qrLoading: false } : prev)
-        return
-      }
-    }
-
-    setModal((prev) => prev ? { ...prev, qrLoading: false } : prev)
-  }
-
-  const handleSend = async () => {
-    if (!modal) return
-    const recipientEmail = modal.doc.clients?.email
-    if (!recipientEmail) {
-      setSendError('Klient nemá zadaný e-mail.')
-      return
-    }
-    setSending(true)
-    setSendError('')
+  const send = async (e: EventRow) => {
+    if (!confirm(`Odeslat upomínku na adresu ${e.recipient_email}?`)) return
+    setBusyId(e.id)
+    setMessage(null)
     try {
-      const res = await fetch('/api/reminders', {
+      const res = await fetch('/api/reminders/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId: modal.doc.id,
-          level: modal.level,
-          recipientEmail,
-          replyTo: modal.replyTo,
-          subject: modal.subject,
-          bodyText: modal.bodyText,
-        }),
+        body: JSON.stringify({ eventId: e.id }),
       })
-      const json = await res.json()
-      if (!res.ok) {
-        setSendError(json.error ?? 'Chyba při odesílání.')
-        return
-      }
-      setSentIds((prev) => ({
-        ...prev,
-        [modal.doc.id]: { sentAt: new Date().toISOString(), level: modal.level },
-      }))
-      setModal(null)
+      const j = await res.json().catch(() => ({}))
+      setMessage(res.ok ? { ok: true, text: 'Upomínka byla odeslána.' } : { ok: false, text: j.error ?? 'Odeslání se nezdařilo.' })
+      setPreview(null)
     } catch {
-      setSendError('Síťová chyba. Zkuste to znovu.')
+      setMessage({ ok: false, text: 'Síťová chyba. Zkuste to znovu.' })
     } finally {
-      setSending(false)
+      setBusyId(null)
+      load()
     }
   }
 
-  // ---------- render ----------
+  const skip = async (e: EventRow) => {
+    const reason = prompt('Důvod přeskočení (nepovinné):')
+    if (reason === null) return
+    setBusyId(e.id)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/reminders/skip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: e.id, reason }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) setMessage({ ok: false, text: j.error ?? 'Přeskočení se nezdařilo.' })
+      setPreview(null)
+    } finally {
+      setBusyId(null)
+      load()
+    }
+  }
 
-  const totalCount = docs.length
+  const markPaid = async () => {
+    if (!paidDialog) return
+    const { fee, date } = paidDialog
+    setBusyId(fee.id)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/reminders/fees/paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId: fee.id, paidDate: date }),
+      })
+      const j = await res.json().catch(() => ({}))
+      setMessage(res.ok ? { ok: true, text: `Vyúčtování ${fee.number} je označeno jako zaplacené.` } : { ok: false, text: j.error ?? 'Uložení se nezdařilo.' })
+      setPaidDialog(null)
+    } catch {
+      setMessage({ ok: false, text: 'Síťová chyba. Zkuste to znovu.' })
+    } finally {
+      setBusyId(null)
+      load()
+    }
+  }
+
+  const waive = async () => {
+    if (!waiveDialog) return
+    const fee = waiveDialog
+    setBusyId(fee.id)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/reminders/fees/waive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId: fee.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      setMessage(res.ok ? { ok: true, text: `Vyúčtování ${fee.number} bylo odpuštěno.` } : { ok: false, text: j.error ?? 'Uložení se nezdařilo.' })
+      setWaiveDialog(null)
+    } catch {
+      setMessage({ ok: false, text: 'Síťová chyba. Zkuste to znovu.' })
+    } finally {
+      setBusyId(null)
+      load()
+    }
+  }
+
+  const sendDisabledReason = (e: EventRow): string | null => {
+    if (!isAdmin) return 'Odeslat může jen administrátor'
+    if (!e.recipient_email) return 'Klient nemá e-mail'
+    if (e.plan?.feesBlocked) return 'Poplatky jsou vypnuté'
+    return null
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#111111]">Upomínky</h1>
-        {!loading && (
-          <p className="text-gray-500 text-sm mt-1">
-            {totalCount === 0
-              ? 'Žádné faktury po splatnosti'
-              : `${totalCount} faktur${totalCount === 1 ? 'a' : totalCount < 5 ? 'y' : ''} po splatnosti`}
-          </p>
-        )}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#111111]">Upomínky</h1>
+          <p className="text-gray-500 text-sm mt-1">Fronta ke schválení: nic se neodešle bez vašeho potvrzení.</p>
+        </div>
+        <Link href="/reminders/manual" className="text-sm text-[#F04E12] hover:underline shrink-0">
+          Starší faktury (ruční upomínky)
+        </Link>
+      </div>
+
+      {message && (
+        <div className={`text-sm px-4 py-3 rounded-lg border ${message.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="flex gap-1 border-b border-gray-200">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === t.id ? 'border-[#F04E12] text-[#F04E12]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            {t.label} <span className="ml-1 text-xs text-gray-400">{counts[t.id]}</span>
+          </button>
+        ))}
       </div>
 
       {loading ? (
         <div className="py-20 text-center text-gray-400 text-sm">Načítám…</div>
-      ) : totalCount === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-20 text-center">
-          <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+      ) : tab === 'fees' ? (
+        fees.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-16 text-center text-gray-500 text-sm">Zatím žádná vyúčtování poplatků</div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                  <th className="px-4 py-3">Číslo</th>
+                  <th className="px-4 py-3">Doklad</th>
+                  <th className="px-4 py-3">Faktura</th>
+                  <th className="px-4 py-3">Klient</th>
+                  <th className="px-4 py-3 text-right">Částka</th>
+                  <th className="px-4 py-3">Vystaveno</th>
+                  <th className="px-4 py-3">Splatnost</th>
+                  <th className="px-4 py-3">Stav</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {fees.map((f) => {
+                  const st = FEE_STATUS[f.status] ?? FEE_STATUS.issued
+                  const open = f.status === 'issued' || f.status === 'sent'
+                  const inv = firstOf(f.invoice)
+                  return (
+                    <tr key={f.id} className="border-b border-gray-50 last:border-0">
+                      <td className="px-4 py-3 font-medium text-[#111111] whitespace-nowrap">{f.number}</td>
+                      <td className="px-4 py-3">{f.subject ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        {f.related_invoice_id ? (
+                          <Link href={`/documents/${f.related_invoice_id}`} className="text-[#F04E12] hover:underline">{inv?.number ?? 'faktura'}</Link>
+                        ) : '—'}
+                      </td>
+                      <td className="px-4 py-3">{firstOf(f.clients)?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">{formatCurrency(f.total_with_vat ?? 0)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{formatDate(f.issue_date)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{formatDate(f.due_date)}</td>
+                      <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span></td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {isAdmin && (
+                          <>
+                            <a href={`/api/pdf?id=${f.id}`} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 mr-2 inline-block">
+                              Stáhnout PDF
+                            </a>
+                            {open && (
+                              <>
+                                <button
+                                  onClick={() => setPaidDialog({ fee: f, date: today })}
+                                  disabled={busyId === f.id}
+                                  className="px-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-medium disabled:opacity-40 mr-2"
+                                >
+                                  Označit jako zaplaceno
+                                </button>
+                                <button
+                                  onClick={() => setWaiveDialog(f)}
+                                  disabled={busyId === f.id}
+                                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                                >
+                                  Odpustit
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-          <p className="text-gray-500 font-medium">Žádné faktury po splatnosti</p>
-          <p className="text-gray-400 text-sm mt-1">Všechny faktury jsou uhrazeny nebo ve lhůtě.</p>
+        )
+      ) : visible.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-16 text-center text-gray-500 text-sm">
+          {tab === 'queue' ? 'Žádné upomínky ke schválení' : tab === 'sent' ? 'Zatím nic odesláno' : 'Nic nebylo přeskočeno'}
         </div>
       ) : (
-        ([3, 2, 1] as ReminderLevel[]).map((level) => {
-          const group = grouped[level]
-          if (group.length === 0) return null
-          const cfg = LEVEL_CONFIG[level]
-          return (
-            <div key={level} className="space-y-3">
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-semibold text-[#111111] uppercase tracking-wide">
-                  {cfg.label}
-                </h2>
-                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badgeClass}`}>
-                  {group.length}
-                </span>
-              </div>
-
-              <div className={`bg-white rounded-xl border shadow-sm overflow-hidden ${cfg.sectionBg}`}>
-                {/* Mobile card list */}
-                <div className="md:hidden divide-y divide-gray-100">
-                  {group.map((doc) => {
-                    const days = daysOverdue(doc.due_date)
-                    const amount = doc.amount_czk ?? doc.total_with_vat
-                    const lastSent = sentIds[doc.id] ?? doc.last_reminder
-                    const noEmail = !doc.clients?.email
-                    const remaining = doc.paid_amount ? amount - doc.paid_amount : amount
-                    return (
-                      <div key={doc.id} className="p-4">
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <span className="font-semibold text-[#F04E12] text-sm">{doc.number}</span>
-                          <span className="inline-flex items-center gap-1 font-semibold text-xs" style={{ color: cfg.color }}>
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.color }} />
-                            {days} dní
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium text-[#111111]">{doc.clients?.name ?? '—'}</p>
-                        {noEmail && <p className="text-xs text-amber-600 mt-0.5">Chybí e-mail klienta</p>}
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-sm font-bold text-[#111111]">{formatCurrency(remaining)}</span>
-                          <span className="text-xs text-gray-400">Spl. {formatDate(doc.due_date)}</span>
-                        </div>
-                        {lastSent && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            Upomínka: {new Date(lastSent.sentAt).toLocaleDateString('cs-CZ')}
-                          </p>
-                        )}
-                        {isAdmin && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                <th className="px-4 py-3">Faktura</th>
+                <th className="px-4 py-3">Klient</th>
+                <th className="px-4 py-3">E-mail</th>
+                <th className="px-4 py-3">Milník</th>
+                <th className="px-4 py-3">Dnů po spl.</th>
+                <th className="px-4 py-3 text-right">Dlužná částka</th>
+                <th className="px-4 py-3">Termín</th>
+                <th className="px-4 py-3">Podmínky</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((e) => {
+                const disabledReason = sendDisabledReason(e)
+                const canAct = e.status === 'pending' || e.status === 'failed'
+                return (
+                  <tr key={e.id} className="border-b border-gray-50 last:border-0">
+                    <td className="px-4 py-3 font-medium text-[#F04E12]">
+                      <Link href={`/documents/${e.invoice_id}`} className="hover:underline">{e.invoice?.number ?? '—'}</Link>
+                      {e.status === 'failed' && <span className="ml-2 text-xs text-red-600" title={e.error ?? ''}>neúspěšné</span>}
+                    </td>
+                    <td className="px-4 py-3">{clientName(e)}</td>
+                    <td className="px-4 py-3">
+                      {e.recipient_email ?? <span className="text-red-600 font-medium">chybí e-mail</span>}
+                    </td>
+                    <td className="px-4 py-3">{e.milestone}. den</td>
+                    <td className="px-4 py-3">{Math.max(0, daysBetween(e.due_date, today))}</td>
+                    <td className="px-4 py-3 text-right">
+                      {e.plan ? formatCurrency(e.plan.amountDue, e.plan.currency) : '—'}
+                    </td>
+                    <td className="px-4 py-3">{formatDate(e.status === 'sent' ? e.sent_at : e.scheduled_for)}</td>
+                    <td className="px-4 py-3" title={e.plan?.feeReason ?? ''}>
+                      {e.plan?.eligibleForFees ? 'ano' : 'ne'}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {e.status === 'skipped' && <span className="text-xs text-gray-400">{e.skip_reason}</span>}
+                      <button onClick={() => setPreview(e)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 mr-2">
+                        Náhled
+                      </button>
+                      {canAct && (
+                        <>
                           <button
-                            onClick={() => openModal(doc)}
-                            disabled={noEmail}
-                            className="w-full mt-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40"
+                            onClick={() => send(e)}
+                            disabled={!!disabledReason || busyId === e.id}
+                            title={disabledReason ?? ''}
+                            className="px-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-medium disabled:opacity-40 mr-2"
                           >
-                            Poslat upomínku
+                            Odeslat
                           </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Faktura</th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Klient</th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Splatnost</th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Dní po splatnosti</th>
-                      <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Částka (CZK)</th>
-                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Naposledy upomínka</th>
-                      <th className="px-6 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {group.map((doc) => {
-                      const days = daysOverdue(doc.due_date)
-                      const amount = doc.amount_czk ?? doc.total_with_vat
-                      const lastSent = sentIds[doc.id] ?? doc.last_reminder
-                      const noEmail = !doc.clients?.email
-
-                      const remaining = doc.paid_amount ? amount - doc.paid_amount : amount
-                      return (
-                        <tr key={doc.id} className="hover:bg-gray-50/60 transition-colors">
-                          <td className="px-6 py-3.5 font-medium text-[#F04E12]">{doc.number}</td>
-                          <td className="px-6 py-3.5">
-                            <div className="text-gray-700">{doc.clients?.name ?? '—'}</div>
-                            {noEmail && (
-                              <div className="text-xs text-amber-600 mt-0.5">Chybí e-mail klienta</div>
-                            )}
-                          </td>
-                          <td className="px-6 py-3.5 text-gray-500 whitespace-nowrap">{formatDate(doc.due_date)}</td>
-                          <td className="px-6 py-3.5">
-                            <span className="inline-flex items-center gap-1.5 font-semibold text-sm" style={{ color: cfg.color }}>
-                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.color }} />
-                              {days} dní
-                            </span>
-                          </td>
-                          <td className="px-6 py-3.5 text-right font-medium whitespace-nowrap">
-                            {formatCurrency(remaining)}
-                            {doc.paid_amount ? (
-                              <div className="text-xs text-gray-400 font-normal mt-0.5">
-                                z {formatCurrency(amount)}
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="px-6 py-3.5">
-                            {lastSent ? (
-                              <div>
-                                <div className="text-xs text-gray-500">
-                                  {new Date(lastSent.sentAt).toLocaleDateString('cs-CZ')}
-                                </div>
-                                <div className="mt-0.5">{levelBadge(lastSent.level as ReminderLevel)}</div>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-gray-400">Ještě neodeslána</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-3.5 text-right">
-                            {isAdmin && (
-                              <button
-                                onClick={() => openModal(doc)}
-                                disabled={noEmail}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F04E12] text-white rounded-lg text-xs font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                                title={noEmail ? 'Klient nemá zadaný e-mail' : undefined}
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                                Poslat upomínku
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-                </div>
-              </div>
-            </div>
-          )
-        })
+                          {isAdmin && (
+                            <button onClick={() => skip(e)} disabled={busyId === e.id} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+                              Přeskočit
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {/* ── Modal ── */}
-      {modal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !sending && setModal(null)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="h-1 bg-[#F04E12] rounded-t-2xl" />
-
-            <div className="p-6 space-y-5">
-              {/* Title row */}
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-bold text-[#111111]">Náhled upomínky</h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm text-gray-500">Faktura {modal.doc.number}</span>
-                    <span className="text-gray-300">·</span>
-                    {levelBadge(modal.level)}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setModal(null)}
-                  disabled={sending}
-                  className="text-gray-400 hover:text-gray-600 transition-colors shrink-0"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Recipient */}
-              <div className="bg-gray-50 rounded-lg px-4 py-3 flex items-center gap-3">
-                <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                <div className="text-sm">
-                  <span className="text-gray-500">Příjemce: </span>
-                  <span className="font-medium text-[#111111]">{modal.doc.clients?.name}</span>
-                  <span className="text-gray-500 ml-2">&lt;{modal.doc.clients?.email}&gt;</span>
-                </div>
-              </div>
-
-              {/* Reply-to */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Odpovědi na</label>
-                <div className="flex gap-2">
-                  {(['info@v-h-s.cz', 'serbus@v-h-s.cz'] as const).map((addr) => (
-                    <button
-                      key={addr}
-                      type="button"
-                      onClick={() => setModal((m) => m ? { ...m, replyTo: addr } : m)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        modal.replyTo === addr
-                          ? 'bg-[#F04E12] text-white border-[#F04E12]'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      {addr}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Subject */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Objednávka</label>
-                <input
-                  value={modal.subject}
-                  onChange={(e) => setModal((m) => m ? { ...m, subject: e.target.value } : m)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12]"
-                />
-              </div>
-
-              {/* Body */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Tělo zprávy</label>
-                <textarea
-                  value={modal.bodyText}
-                  onChange={(e) => setModal((m) => m ? { ...m, bodyText: e.target.value } : m)}
-                  rows={12}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F04E12] resize-y font-mono leading-relaxed"
-                />
-              </div>
-
-              {/* Payment box preview */}
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Platební údaje (součást e-mailu)</p>
-                </div>
-                {modal.qrLoading ? (
-                  <div className="px-4 py-5 flex items-center gap-2 text-gray-400 text-sm">
-                    <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Načítám platební údaje…
-                  </div>
-                ) : (
-                  <div className="px-4 py-4 flex gap-4">
-                    {/* Payment details */}
-                    <div className="flex-1 min-w-0">
-                      <table className="text-sm w-full">
-                        <tbody>
-                          <PaymentRow label={modal.labels.labelInvoice} value={modal.doc.number} />
-                          {modal.doc.paid_amount ? (
-                            <>
-                              <PaymentRow
-                                label={modal.labels.labelRemaining}
-                                value={formatCurrency((modal.doc.amount_czk ?? modal.doc.total_with_vat) - modal.doc.paid_amount)}
-                              />
-                              <PaymentRow
-                                label={modal.labels.labelPaidAmount}
-                                value={formatCurrency(modal.doc.paid_amount)}
-                              />
-                            </>
-                          ) : (
-                            <PaymentRow
-                              label={modal.labels.labelAmount}
-                              value={
-                                modal.doc.currency === 'EUR' && modal.doc.total_with_vat != null
-                                  ? `${formatCurrency(modal.doc.amount_czk ?? modal.doc.total_with_vat)} (${formatCurrency(modal.doc.total_with_vat, 'EUR')})`
-                                  : formatCurrency(modal.doc.amount_czk ?? modal.doc.total_with_vat)
-                              }
-                            />
-                          )}
-                          {modal.paymentInfo?.bankAccount && (
-                            <PaymentRow label={modal.labels.labelAccount} value={modal.paymentInfo.bankAccount} />
-                          )}
-                          {modal.paymentInfo?.iban && (
-                            <PaymentRow label="IBAN" value={modal.paymentInfo.iban} />
-                          )}
-                          {modal.doc.variable_symbol && (
-                            <PaymentRow label={modal.labels.labelVs} value={modal.doc.variable_symbol} />
-                          )}
-                          <PaymentRow label={modal.labels.labelDueDate} value={formatDate(modal.doc.due_date)} />
-                          {!modal.paymentInfo && (
-                            <tr>
-                              <td colSpan={2} className="py-1 text-xs text-gray-400 italic">
-                                Platební údaje nebyly nalezeny (chybí profil dodavatele)
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    {/* QR code */}
-                    {modal.qrCodeUrl ? (
-                      <div className="shrink-0 text-center">
-                        <img
-                          src={modal.qrCodeUrl}
-                          alt="QR platba"
-                          width={96}
-                          height={96}
-                          className="border border-gray-200 rounded-lg p-1"
-                        />
-                        <p className="text-xs text-gray-400 mt-1">{modal.labels.labelQr}</p>
-                      </div>
-                    ) : modal.paymentInfo?.iban == null && !modal.qrLoading ? (
-                      <div className="shrink-0 w-24 flex items-center justify-center text-xs text-gray-300 text-center">
-                        QR není k dispozici (chybí IBAN)
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-
-              {/* Signature preview */}
-              <div className="border border-gray-100 rounded-lg p-4 bg-gray-50">
-                <p className="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">Podpis (automaticky připojen)</p>
-                <div className="text-sm text-gray-600 space-y-0.5">
-                  <p>{modal.labels.signGreeting}</p>
-                  <p className="font-bold text-[#111111]">Rudolf von Zahlung</p>
-                  <p className="text-gray-500">{modal.labels.signTitle}</p>
-                  <p className="text-gray-500">{modal.labels.signCompanyPrep}</p>
-                  <p className="font-black text-[#F04E12] text-2xl" style={{ fontFamily: 'Georgia, serif' }}>vhs.</p>
-                  <p className="text-gray-500 text-xs">www.v-h-s.cz · info@v-h-s.cz</p>
-                  <p
-                    className="text-gray-400 text-xs pt-1 border-t border-gray-200 mt-2"
-                    dangerouslySetInnerHTML={{ __html: modal.labels.aiNote }}
-                  />
-                </div>
-              </div>
-
-              {/* Send info note */}
-              <div className="text-xs text-gray-400 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Odesílací adresa: upominka@v-h-s.cz · E-mail bude odeslán jako HTML s formátovaným podpisem a PDF přílohou.
-              </div>
-
-              {sendError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
-                  {sendError}
-                </div>
-              )}
-
-              {/* Buttons */}
-              <div className="flex gap-3 pt-1">
-                <button
-                  onClick={() => setModal(null)}
-                  disabled={sending}
-                  className="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
-                  Zrušit
-                </button>
-                <button
-                  onClick={handleSend}
-                  disabled={sending}
-                  className="flex-1 py-2.5 bg-[#F04E12] text-white rounded-lg text-sm font-semibold hover:bg-[#d9430f] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                >
-                  {sending ? (
-                    <>
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Odesílám…
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      Odeslat upomínku
-                    </>
-                  )}
-                </button>
-              </div>
+      {paidDialog && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPaidDialog(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4" onClick={(ev) => ev.stopPropagation()}>
+            <h2 className="font-semibold text-[#111111]">Označit jako zaplaceno</h2>
+            <p className="text-sm text-gray-600">Vyúčtování {paidDialog.fee.number}, částka {formatCurrency(paidDialog.fee.total_with_vat ?? 0)}.</p>
+            <label className="block text-sm text-gray-600">
+              Datum úhrady
+              <input
+                type="date"
+                value={paidDialog.date}
+                max={today}
+                onChange={(ev) => setPaidDialog({ ...paidDialog, date: ev.target.value })}
+                className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPaidDialog(null)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Zrušit</button>
+              <button onClick={markPaid} disabled={!paidDialog.date || busyId === paidDialog.fee.id} className="px-4 py-2 bg-[#F04E12] text-white rounded-lg text-sm font-medium disabled:opacity-40">Uložit</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {waiveDialog && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setWaiveDialog(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4" onClick={(ev) => ev.stopPropagation()}>
+            <h2 className="font-semibold text-[#111111]">Odpustit poplatek</h2>
+            <p className="text-sm text-gray-600">
+              Vyúčtování {waiveDialog.number} ({formatCurrency(waiveDialog.total_with_vat ?? 0)}) se stornuje a systém ho už znovu nevystaví. Tuto akci nelze vrátit zpět.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setWaiveDialog(null)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Zrušit</button>
+              <button onClick={waive} disabled={busyId === waiveDialog.id} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-40">Odpustit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {preview && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPreview(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={(ev) => ev.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-[#111111]">Náhled: {preview.invoice?.number} · {preview.milestone}. den</h2>
+              <button onClick={() => setPreview(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="px-6 py-4 space-y-1 text-sm">
+              <p><span className="text-gray-400 inline-block w-32">Komu</span>{preview.recipient_email ?? <span className="text-red-600">chybí e-mail</span>}</p>
+              <p><span className="text-gray-400 inline-block w-32">Od</span>{REMINDER_FROM}</p>
+              <p><span className="text-gray-400 inline-block w-32">Odpovědi na</span>{REMINDER_REPLY_TO}</p>
+              <p><span className="text-gray-400 inline-block w-32">Předmět</span>{preview.subject ?? '—'}</p>
+              <p>
+                <span className="text-gray-400 inline-block w-32">Příloha</span>
+                <a href={`/api/pdf?id=${preview.invoice_id}`} target="_blank" rel="noreferrer" className="text-[#F04E12] hover:underline">
+                  faktura {preview.invoice?.number} (PDF)
+                </a>
+              </p>
+              {preview.plan?.eligibleForFees && preview.milestone >= 8 && (
+                <p className="text-xs text-gray-500 pt-1">
+                  Při odeslání se vystaví vyúčtování smluvních pokut a náhrady podle podmínek objednávky; e-mail je bude obsahovat včetně přehledu dlužných částek, QR kódů a PDF příloh.
+                </p>
+              )}
+              <p className="text-xs text-gray-400 pt-1">Text se při odeslání přepočítá k aktuálnímu dni.</p>
+            </div>
+            <div className="px-6 pb-4">
+              {preview.body_html ? (
+                <iframe title="Náhled e-mailu" sandbox="" srcDoc={preview.body_html} className="w-full h-[480px] border border-gray-200 rounded-lg" />
+              ) : (
+                <p className="text-sm text-gray-400">Bez náhledu.</p>
+              )}
+            </div>
+            {(preview.status === 'pending' || preview.status === 'failed') && (
+              <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+                {isAdmin && (
+                  <button onClick={() => skip(preview)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Přeskočit</button>
+                )}
+                <button
+                  onClick={() => send(preview)}
+                  disabled={!!sendDisabledReason(preview) || busyId === preview.id}
+                  title={sendDisabledReason(preview) ?? ''}
+                  className="px-4 py-2 bg-[#F04E12] text-white rounded-lg text-sm font-medium disabled:opacity-40"
+                >
+                  Odeslat
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
-  )
-}
-
-function PaymentRow({ label, value }: { label: string; value: string }) {
-  return (
-    <tr>
-      <td className="pr-4 py-1 text-xs text-gray-500 whitespace-nowrap align-top">{label}</td>
-      <td className="py-1 text-xs font-semibold text-[#111111]">{value}</td>
-    </tr>
   )
 }

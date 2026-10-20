@@ -4,7 +4,7 @@ import { getLang, type Lang } from '@/components/pdf/invoice-translations'
 export type ReminderLevel = 1 | 2 | 3
 export { getLang, type Lang }
 
-interface ReminderVars {
+export interface ReminderVars {
   number: string
   daysOverdue: number
   amount: number
@@ -16,6 +16,9 @@ interface ReminderVars {
   variableSymbol?: string | null
   qrCodeUrl?: string | null
   paidAmount?: number | null
+  /** přepsání popisku čísla dokladu a nadpisu boxu (vyúčtování v e-mailu s poplatky); bez nich se použije faktura */
+  documentLabel?: string
+  boxHeader?: string
 }
 
 // ─── i18n ────────────────────────────────────────────────────────────────────
@@ -236,7 +239,7 @@ export function getReminderBodyText(level: ReminderLevel, vars: ReminderVars, la
 
 // ---------- payment box ----------
 
-function buildPaymentBoxHtml(vars: ReminderVars, lang: Lang): string {
+export function buildPaymentBoxHtml(vars: ReminderVars, lang: Lang): string {
   const i = REMINDER_I18N[lang]
   const { number, amount, dueDate, currency, amountEur, bankAccount, iban, variableSymbol, qrCodeUrl, paidAmount } = vars
   const remaining = paidAmount ? amount - paidAmount : amount
@@ -248,7 +251,7 @@ function buildPaymentBoxHtml(vars: ReminderVars, lang: Lang): string {
     : amountCzkFormatted
 
   const rows: { label: string; value: string }[] = [
-    { label: i.labelInvoice, value: number },
+    { label: vars.documentLabel ?? i.labelInvoice, value: number },
     ...(paidAmount
       ? [
           { label: i.labelRemaining, value: formatCurrency(remaining) },
@@ -277,7 +280,7 @@ function buildPaymentBoxHtml(vars: ReminderVars, lang: Lang): string {
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
   <tr>
     <td style="padding:20px 24px;">
-      <p style="margin:0 0 14px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">${i.paymentBoxHeader}</p>
+      <p style="margin:0 0 14px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">${vars.boxHeader ?? i.paymentBoxHeader}</p>
       <table cellpadding="0" cellspacing="0" border="0" width="100%">
         <tr>
           <td style="vertical-align:top;">
@@ -295,7 +298,7 @@ function buildPaymentBoxHtml(vars: ReminderVars, lang: Lang): string {
 
 // ---------- signature ----------
 
-function buildSignatureHtml(lang: Lang): string {
+export function buildSignatureHtml(lang: Lang): string {
   const i = REMINDER_I18N[lang]
   return `
 <table cellpadding="0" cellspacing="0" border="0" style="margin-top:32px;padding-top:24px;border-top:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#374151;">
@@ -322,15 +325,8 @@ function buildSignatureHtml(lang: Lang): string {
 
 // ---------- HTML builder ----------
 
-export function getReminderHtml(level: ReminderLevel, vars: ReminderVars, lang: Lang = 'cs'): string {
-  const i = REMINDER_I18N[lang]
-  const { number, daysOverdue } = vars
-
-  let bodyHtml: string
-  if (level === 1) bodyHtml = i.htmlBody1(number, daysOverdue)
-  else if (level === 2) bodyHtml = i.htmlBody2(number, daysOverdue)
-  else bodyHtml = i.htmlBody3(number, daysOverdue)
-
+/** Společný rámec upomínky (hlavička s logem, tělo, platební box s QR, podpis); sdílí ho i fronta upomínek. */
+export function wrapReminderHtml(bodyHtml: string, vars: ReminderVars, lang: Lang = 'cs', afterPaymentHtml = ''): string {
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -350,6 +346,7 @@ export function getReminderHtml(level: ReminderLevel, vars: ReminderVars, lang: 
             <td style="padding:32px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
               ${bodyHtml}
               ${buildPaymentBoxHtml(vars, lang)}
+              ${afterPaymentHtml}
               ${buildSignatureHtml(lang)}
             </td>
           </tr>
@@ -359,4 +356,16 @@ export function getReminderHtml(level: ReminderLevel, vars: ReminderVars, lang: 
   </table>
 </body>
 </html>`
+}
+
+export function getReminderHtml(level: ReminderLevel, vars: ReminderVars, lang: Lang = 'cs'): string {
+  const i = REMINDER_I18N[lang]
+  const { number, daysOverdue } = vars
+
+  let bodyHtml: string
+  if (level === 1) bodyHtml = i.htmlBody1(number, daysOverdue)
+  else if (level === 2) bodyHtml = i.htmlBody2(number, daysOverdue)
+  else bodyHtml = i.htmlBody3(number, daysOverdue)
+
+  return wrapReminderHtml(bodyHtml, vars, lang)
 }

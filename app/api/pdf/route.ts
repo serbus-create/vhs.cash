@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { generateInvoicePdf } from '@/lib/pdf/generate';
+import { generateSettlementPdf } from '@/lib/pdf/generate-settlement';
 import { generateOrderPdf, loadOrderPdfInput } from '@/lib/pdf/generate-order';
 
 export const runtime = 'nodejs';
@@ -47,16 +48,14 @@ export async function GET(request: Request) {
       .eq('id', id)
       .single();
 
-    if (doc?.type === 'vyuctovani') {
-      return NextResponse.json({ error: 'PDF vyúčtování se doplní v dalším kroku' }, { status: 501 });
-    }
-
     let buffer: Buffer;
     const extraHeaders: Record<string, string> = {};
     if (doc?.type === 'objednavka') {
       const { pdf, missing } = await generateOrderPdf(await loadOrderPdfInput(supabase, id));
       buffer = pdf;
       if (missing.length > 0) extraHeaders['X-Terms-Missing'] = missing.join(',');
+    } else if (doc?.type === 'vyuctovani') {
+      buffer = await generateSettlementPdf(supabase, id);
     } else {
       buffer = await generateInvoicePdf(supabase, id);
     }

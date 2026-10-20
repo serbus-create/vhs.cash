@@ -76,6 +76,7 @@ export interface Document {
   contact_email?: string | null
   order_id?: string | null
   related_invoice_id?: string | null
+  fee_kind?: 'pokuta' | 'pokuta_navyseni' | 'pausal' | 'denni' | null
   terms_template_id?: string | null
   terms_values?: Record<string, string> | null
   terms_snapshot?: string | null
